@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base 监控 - v5.6 精简 AI 版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <style>
+        :root { --bg-color: #0f172a; --card-bg: #1e293b; --text-primary: #f1f5f9; --text-secondary: #94a3b8; --accent-color: #38bdf8; --success-color: #4ade80; --warning-color: #facc15; --danger-color: #f43f5e; --border-color: #334155; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); color: var(--text-primary); margin: 0; padding: 20px; font-size: 14px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header { background: var(--card-bg); padding: 20px; border-radius: 16px; border: 1px solid var(--border-color); margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        h1 { margin: 0 0 15px 0; color: var(--accent-color); font-size: 22px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; }
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        .control-group label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+        input, select, textarea { background: #0f172a; border: 1px solid var(--border-color); color: white; padding: 8px; border-radius: 6px; font-size: 13px; }
+        textarea.watchlist { height: 80px; resize: vertical; font-family: monospace; font-size: 12px; color: #a5f3fc; border: 1px solid #0e7490; }
+        .btn-test { background: #334155; border: none; color: white; cursor: pointer; padding: 5px 10px; border-radius: 4px; font-size: 12px; transition: 0.2s; }
+        
+        .status-bar { margin-top: 15px; font-size: 13px; color: var(--text-secondary); display: grid; grid-template-columns: auto auto auto 1fr; gap: 20px; align-items: center; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+        .status-item { display: flex; align-items: center; gap: 8px; }
+        .status-label { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
+        .status-value { font-family: 'Courier New', monospace; font-weight: bold; color: #fff; font-size: 14px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; display: inline-block; }
+        .status-dot.active { background: var(--success-color); box-shadow: 0 0 8px var(--success-color); animation: pulse 1.5s infinite; }
+        .latency-good { color: var(--success-color); }
+        .latency-medium { color: var(--warning-color); }
+        .latency-bad { color: var(--danger-color); animation: flash 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        #monitor-list { display: flex; flex-direction: column; gap: 12px; }
+        .card { background-color: var(--card-bg); border-radius: 10px; padding: 12px 16px; position: relative; border-left: 4px solid var(--accent-color); box-shadow: 0 2px 4px rgba(0,0,0,0.2); animation: slideIn 0.3s ease-out; }
+        .card.watchlist-hit { background: linear-gradient(135deg, #450a0a 0%, #7f1d1d 100%); border-left: 6px solid #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); animation: pulseRed 2s infinite; }
+        .card.high-value { border-left-color: var(--success-color); background: linear-gradient(90deg, #1e293b 0%, #064e3b 100%); }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .token-header-group { display: flex; gap: 12px; align-items: center; }
+        .token-img { width: 48px; height: 48px; border-radius: 50%; background: #000; border: 2px solid #334155; object-fit: cover; }
+        .token-info { display: flex; flex-direction: column; gap: 2px; }
+        .token-symbol { font-size: 20px; font-weight: bold; color: #ffd700; text-shadow: 0 0 10px rgba(255, 215, 0, 0.2); line-height: 1.2; }
+        .token-name { font-size: 12px; color: #94a3b8; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .token-value { font-size: 14px; font-weight: bold; color: var(--success-color); }
+        .fdv-badge { font-size: 14px; font-weight: bold; background: #475569; color: #fff; padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid rgba(255,255,255,0.1); margin-top: 4px; }
+        
+        .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+        .time-badge { font-family: 'Courier New', monospace; font-size: 12px; color: var(--accent-color); background: rgba(56, 189, 248, 0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.2); display: flex; align-items: center; gap: 4px; }
+        .role-badge { font-size: 11px; padding: 3px 6px; border-radius: 4px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); }
+        .role-human { background: #065f46; color: #6ee7b7; border-color: #059669; }
+        .role-bot { background: #7f1d1d; color: #fca5a5; border-color: #b91c1c; }
+        .clanker-tag { font-size: 10px; background: linear-gradient(90deg, #6366f1, #a855f7); color: white; padding: 2px 6px; border-radius: 10px; display: flex; align-items: center; gap: 4px; text-decoration: none; transition: transform 0.2s; }
+        .clanker-tag:hover { transform: scale(1.05); }
+        
+        .card-body { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 10px; align-items: flex-start; margin-top: 10px; }
+        .info-col { display: flex; flex-direction: column; }
+        .info-label { font-size: 11px; opacity: 0.6; margin-bottom: 2px; }
+        .info-value { font-family: monospace; font-size: 12px; display: flex; align-items: center; gap: 6px; color: #e2e8f0; }
+        .ca-display { word-break: break-all; line-height: 1.2; font-size: 11px; color: #94a3b8; }
+        .copy-btn { cursor: pointer; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--accent-color); border-radius: 3px; padding: 2px 6px; font-size: 10px; white-space: nowrap; }
+        
+        .card-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); flex-wrap: wrap; }
+        .action-link { text-decoration: none; font-size: 14px; opacity: 0.8; transition: 0.2s; display: flex; align-items: center; gap: 4px; }
+        .btn-clanker { background: linear-gradient(90deg, #4f46e5, #7c3aed); color: white; padding: 4px 10px; border-radius: 4px; font-weight: bold; }
+        .btn-ai { background: linear-gradient(90deg, #ec4899, #8b5cf6); color: white; padding: 4px 10px; border-radius: 4px; font-weight: bold; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: transform 0.2s; }
+        .btn-ai:hover { transform: scale(1.05); }
+        .ai-result { margin-top: 10px; padding: 10px; background: rgba(236, 72, 153, 0.1); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 6px; font-size: 13px; color: #fbcfe8; display: none; animation: fadeIn 0.5s; }
+        .loading-spinner { text-align: center; color: var(--text-secondary); padding: 40px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>🚀 Base 监控 - v5.6 精简 AI 版</h1>
+        <div class="controls-grid">
+            <div class="control-group">
+                <label>💰 最低价值 ($)</label>
+                <input type="number" id="minValue" value="1" min="0" step="1">
+            </div>
+            <div class="control-group">
+                <label>📉 屏蔽无池子</label>
+                <input type="checkbox" id="hideNoPool" style="width:20px; height:20px;">
+            </div>
+            <div class="control-group">
+                <label>📈 最低市值 ($)</label>
+                <input type="number" id="minFDV" value="3000" min="0" step="100">
+            </div>
+            <div class="control-group" style="border-left: 1px solid #334155; padding-left: 10px;">
+                <label>💎 WETH 阈值</label>
+                <input type="number" id="minWeth" value="0.01" min="0" step="0.01">
+            </div>
+            <div class="control-group">
+                <label>👶 WETH 最大Tx</label>
+                <input type="number" id="wethMaxTx" value="10" min="0" step="1">
+            </div>
+            <div class="control-group">
+                <label>🎵 警报音效</label>
+                <div style="display:flex; gap:5px;">
+                    <select id="soundSelect" style="flex:1;">
+                        <option value="success">✅ 成功</option>
+                        <option value="coin">💰 金币</option>
+                        <option value="alert">🚨 警报</option>
+                        <option value="laser">🔫 激光</option>
+                        <option value="bell">🔔 门铃</option>
+                    </select>
+                    <button class="btn-test" onclick="previewSound()">🔊</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>🌐 节点线路</label>
+                <select id="rpcSelect" onchange="changeRpc()">
+                    <option value="https://base.llamarpc.com">Llama (推荐)</option>
+                    <option value="https://base-rpc.publicnode.com">PublicNode</option>
+                    <option value="https://mainnet.base.org">官方</option>
+                    <option value="https://1rpc.io/base">1RPC</option>
+                </select>
+            </div>
+            <div class="control-group" style="grid-column: span 6;">
+                <label>🎯 重点监控 (无视过滤)</label>
+                <textarea id="watchlist" class="watchlist" placeholder="0x123... (特朗普)"></textarea>
+            </div>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-item"><span class="status-label">STATUS</span><span class="status-dot" id="statusDot"></span><span id="rpcName" style="color:#fff; font-weight:bold;">初始化...</span></div>
+            <div class="status-item" style="border-left:1px solid rgba(255,255,255,0.1);padding-left:20px;"><span class="status-label">BLOCK</span><span class="status-value" id="blockHeight">-</span></div>
+            <div class="status-item" style="border-left:1px solid rgba(255,255,255,0.1);padding-left:20px;"><span class="status-label">LATENCY</span><span class="status-value" id="latencyDisplay">-</span></div>
+            <div class="status-item" style="margin-left:auto;"><span class="status-label">CAPTURED</span><span class="status-value" id="txCount" style="color:#4ade80;">0</span></div>
+        </div>
+    </div>
+    
+    <div id="monitor-list"><div class="loading-spinner">📡 正在连接节点...</div></div>
+</div>
+<audio id="audioPlayer"></audio>
+
+<script>
+    const apiKey = ""; // 填入你的 Gemini API Key
+    let currentRpc = "https://base.llamarpc.com";
+    const CONFIG = {
+        contract: "0xf3622742b1e446d92e45e22923ef11c2fcd55d68",
+        weth: "0x4200000000000000000000000000000000000006",
+        interval: 3000
+    };
+    const SOUNDS = { 'success': 'https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3', 'coin': 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3', 'alert': 'https://assets.mixkit.co/active_storage/sfx/995/995-preview.mp3', 'laser': 'https://assets.mixkit.co/active_storage/sfx/1524/1524-preview.mp3', 'bell': 'https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3' };
+
+    let provider, contract;
+    let lastBlock = 0, totalTx = 0;
+    let isScanning = false; 
+    let processedLogs = new Set(); 
+
+    function copyText(text) {
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => { Toastify({ text: "✅ 已复制!", duration: 1500, style: { background: "#38bdf8", color: "black", fontWeight: "bold" }, position: "center" }).showToast(); });
+    }
+
+    async function analyzeToken(symbol, name, cardId) {
+        const resultDiv = document.getElementById(cardId);
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<span class="ai-loading">🧠 AI 正在分析 "AI Agent" 浓度...</span>';
+        try {
+            // 🔥 Prompt 升级：结合 Bankr/Clanker 概念
+            const prompt = `你是一个资深的Base链Meme币分析师。请分析代币 "${name}" (${symbol})。
+            重点判断：
+            1. 它是否在蹭 "AI Agent" (如Clanker, Bankr, OpenClaw) 的热点？
+            2. 名字是否具有 "Autonomous" (自主)、"Swarm" (蜂群) 或 "Bot" 的特征？
+            3. 给出一个简短犀利的中文评价（50字内）。如果是纯土狗，请无情吐槽。`;
+            
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            const data = await response.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "暂无评价";
+            resultDiv.innerHTML = `<strong>✨ AI 简评：</strong> ${marked.parseInline(text)}`;
+        } catch (error) { resultDiv.innerHTML = '❌ 分析失败'; }
+    }
+
+    function changeRpc() {
+        currentRpc = document.getElementById('rpcSelect').value;
+        init();
+    }
+
+    async function init() {
+        try {
+            isScanning = false; processedLogs.clear();
+            provider = new ethers.providers.JsonRpcProvider(currentRpc);
+            contract = new ethers.Contract(CONFIG.contract, ["event ClaimTokens(address indexed user, address indexed token, uint256 amount)"], provider);
+            const block = await provider.getBlock('latest');
+            lastBlock = block.number;
+            updateStatusDisplay(block);
+            document.getElementById('monitor-list').innerHTML = '<div class="loading-spinner">📡 正在等待新交易...</div>';
+            scheduleScan();
+        } catch (e) { 
+            document.getElementById('rpcName').innerText = "连接失败"; document.getElementById('statusDot').className = "status-dot error";
+        }
+    }
+
+    function scheduleScan() { setTimeout(async () => { await scan(); scheduleScan(); }, CONFIG.interval); }
+
+    async function scan() {
+        if (isScanning) return; isScanning = true;
+        try {
+            const block = await provider.getBlock('latest');
+            updateStatusDisplay(block);
+            if (block.number <= lastBlock) { isScanning = false; return; }
+            const logs = await contract.queryFilter(contract.filters.ClaimTokens(), lastBlock + 1, block.number);
+            for (const log of logs.reverse()) await processLog(log);
+            lastBlock = block.number;
+        } catch (e) { console.error("Scan error:", e); }
+        isScanning = false; 
+    }
+
+    function updateStatusDisplay(block) {
+        if(!block) return;
+        const rpcSelect = document.getElementById('rpcSelect');
+        document.getElementById('rpcName').innerText = rpcSelect.options[rpcSelect.selectedIndex].text.split('(')[0].trim();
+        document.getElementById('statusDot').className = "status-dot active";
+        document.getElementById('blockHeight').innerText = block.number;
+        const diff = Math.floor(Date.now() / 1000) - block.timestamp;
+        const el = document.getElementById('latencyDisplay');
+        el.innerText = `${diff}s`;
+        el.className = "status-value " + (diff <= 5 ? "latency-good" : (diff <= 15 ? "latency-medium" : "latency-bad"));
+    }
+
+    async function processLog(log) {
+        const uniqueId = `${log.transactionHash}-${log.logIndex}`;
+        if (processedLogs.has(uniqueId)) return;
+        processedLogs.add(uniqueId);
+        if (processedLogs.size > 2000) processedLogs.clear();
+
+        const { user, token, amount } = log.args;
+        try {
+            const tx = await provider.getTransaction(log.transactionHash);
+            const payer = tx.from;
+
+            if (token.toLowerCase() === CONFIG.weth.toLowerCase()) {
+                const decimals = 18; const symbol = "WETH"; const name = "Wrapped Ether";
+                const priceData = await fetchPrice(token);
+                return handleTokenData(token, user, payer, symbol, name, decimals, amount, priceData, log.transactionHash);
+            }
+
+            const tokenContract = new ethers.Contract(token, ["function symbol() view returns (string)", "function decimals() view returns (uint8)", "function name() view returns (string)"], provider);
+            let clankerData = null;
+            try {
+                const res = await fetch(`https://www.clanker.world/api/tokens?q=${token}`);
+                const json = await res.json();
+                if(json.data && json.data.length > 0) clankerData = json.data.find(t => t.contract_address.toLowerCase() === token.toLowerCase());
+            } catch(e) {}
+
+            let [symbol, decimals, name, priceData, userNonce, payerNonce] = await Promise.all([
+                tokenContract.symbol().catch(()=>"???"),
+                tokenContract.decimals().catch(()=>18),
+                tokenContract.name().catch(()=>""),
+                fetchPrice(token),
+                provider.getTransactionCount(user),
+                provider.getTransactionCount(payer)
+            ]);
+
+            if (symbol === "???" && clankerData && clankerData.symbol) symbol = clankerData.symbol;
+            if ((!name || name === "") && clankerData && clankerData.name) name = clankerData.name;
+
+            handleTokenData(token, user, payer, symbol, name, decimals, amount, priceData, log.transactionHash, userNonce, payerNonce, clankerData);
+        } catch (e) { console.error(e); }
+    }
+
+    function handleTokenData(token, user, payer, symbol, name, decimals, amount, priceData, txHash, userNonce, payerNonce, clankerData) {
+        const fmtAmount = ethers.utils.formatUnits(amount, decimals);
+        
+        if (token.toLowerCase() === CONFIG.weth.toLowerCase()) {
+            if (parseFloat(fmtAmount) < parseFloat(document.getElementById('minWeth').value)) return;
+            const wethMaxTx = parseInt(document.getElementById('wethMaxTx').value) || 10;
+            if (userNonce !== undefined && userNonce > wethMaxTx) return;
+        } else {
+            let isWatchlist = false;
+            document.getElementById('watchlist').value.split('\n').forEach(line => { if(line.toLowerCase().includes(token.toLowerCase())) isWatchlist = true; });
+            if (!isWatchlist) {
+                const price = priceData ? parseFloat(priceData.priceUsd) : 0;
+                const fdv = priceData ? parseFloat(priceData.fdv) : 0;
+                const value = parseFloat(fmtAmount) * price;
+                if (document.getElementById('hideNoPool').checked && fdv <= 0) return;
+                if (fdv > 0 && fdv < parseFloat(document.getElementById('minFDV').value)) return;
+                if (price > 0 && value < parseFloat(document.getElementById('minValue').value)) return;
+            }
+        }
+
+        const price = priceData ? parseFloat(priceData.priceUsd) : 0;
+        const fdv = priceData ? parseFloat(priceData.fdv) : 0;
+        const value = parseFloat(fmtAmount) * price;
+        const list = {};
+        document.getElementById('watchlist').value.split('\n').forEach(line => {
+            const match = line.match(/(0x[a-fA-F0-9]{40})/);
+            if(match) list[match[1].toLowerCase()] = line.match(/\((.*?)\)/)?.[1] || "重点";
+        });
+        const targetName = list[token.toLowerCase()];
+        if(userNonce === undefined) userNonce = 999;
+        if(payerNonce === undefined) payerNonce = 999;
+
+        addCard({ symbol, name, token, user, payer, amount: parseFloat(fmtAmount).toLocaleString(undefined, {maximumFractionDigits:2}), value, price, fdv, tx: txHash, targetName, userNonce, payerNonce, clankerData });
+    }
+
+    async function fetchPrice(token) {
+        try {
+            const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${token}`);
+            const d = await r.json();
+            return d.pairs?.[0] || null;
+        } catch { return null; }
+    }
+
+    function addCard(d) {
+        if(totalTx === 0) document.getElementById('monitor-list').innerHTML = '';
+        totalTx++; document.getElementById('txCount').innerText = totalTx;
+
+        const el = document.createElement('div');
+        el.className = `card ${d.targetName ? 'watchlist-hit' : (d.value > 100 ? 'high-value' : '')}`;
+        const aiResultId = 'ai-res-' + Math.random().toString(36).substr(2, 9);
+        let fdvStr = '<span style="color:#94a3b8">⏳ 暂无池子</span>';
+        if (d.fdv > 0) fdvStr = d.fdv >= 1000000 ? `<span style="color:#4ade80">$${(d.fdv/1000000).toFixed(2)}M</span>` : `<span style="color:#facc15">$${(d.fdv/1000).toFixed(0)}K</span>`;
+        const clankerLink = `https://www.clanker.world/clanker/${d.token}`;
+        
+        let imgHtml = '';
+        let socialHtml = '';
+        if (d.clankerData) {
+            if(d.clankerData.img_url) imgHtml = `<img src="${d.clankerData.img_url}" class="token-img" onerror="this.style.display='none'">`;
+            if(d.clankerData.requestor_fid) socialHtml = `<a href="https://warpcast.com/~/profiles/${d.clankerData.requestor_fid}" target="_blank" class="clanker-tag">👤 FID: ${d.clankerData.requestor_fid}</a>`;
+        }
+
+        const isSelf = d.user.toLowerCase() === d.payer.toLowerCase();
+        let roleHtml = isSelf 
+            ? `<div class="role-box"><span class="role-badge role-human">👤 本人操作 (Tx:${d.userNonce})</span></div>`
+            : `<div class="role-box"><span class="role-badge role-bot">🤖 代打/Bot (Tx:${d.payerNonce})</span><span style="font-size:10px; color:#94a3b8;">号主Tx: ${d.userNonce}</span></div>`;
+
+        const timeString = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+
+        el.innerHTML = `
+            <div class="card-header">
+                <div class="token-header-group">
+                    ${imgHtml}
+                    <div class="token-info">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="token-symbol">${d.targetName ? `${d.targetName} (${d.symbol})` : d.symbol}</span>
+                            ${socialHtml}
+                        </div>
+                        <span class="token-name">${d.name}</span>
+                        <div style="margin-top:2px;">
+                            <span class="token-value" style="${d.targetName?'color:#fff':''}">${d.value>0?'$'+d.value.toFixed(2):'等待开盘'}</span>
+                            <span class="fdv-badge">💎 FDV: ${fdvStr}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-right"><div class="time-badge">⏰ ${timeString}</div>${roleHtml}</div>
+            </div>
+            <div class="card-body">
+                <div class="info-col"><span class="info-label">数量</span><span class="info-value">${d.amount}</span></div>
+                <div class="info-col" style="flex:1.5;"><span class="info-label">合约地址 (CA)</span><span class="info-value ca-display">${d.token}</span><div style="margin-top:2px;"><button class="copy-btn" onclick="copyText('${d.token}')">复制CA</button></div></div>
+                ${!isSelf ? `<div class="info-col" style="grid-column: span 2; border-top:1px dashed #334155; padding-top:5px; margin-top:5px;"><div style="display:flex; justify-content:space-between;"><div><span class="info-label">领取入账:</span> <span class="info-value">${d.user.slice(0,4)}...${d.user.slice(-4)} <button class="copy-btn" onclick="copyText('${d.user}')">复制</button></span></div><div><span class="info-label" style="color:#fca5a5">幕后操作:</span> <span class="info-value" style="color:#fca5a5">${d.payer.slice(0,4)}...${d.payer.slice(-4)} <button class="copy-btn" onclick="copyText('${d.payer}')">复制</button></span></div></div></div>` : `<div class="info-col"><span class="info-label">领取人</span><span class="info-value">${d.user.slice(0,4)}...${d.user.slice(-4)} <button class="copy-btn" onclick="copyText('${d.user}')">复制</button></span></div>`}
+            </div>
+            <div id="${aiResultId}" class="ai-result"></div>
+            <div class="card-actions">
+                <button class="action-link btn-ai" onclick="analyzeToken('${d.symbol}', '${d.name.replace(/'/g, "\\'")}', '${aiResultId}')">✨ AI 简评</button>
+                <a href="${clankerLink}" target="_blank" class="action-link btn-clanker">🤖 Clanker</a>
+                <a href="https://dexscreener.com/base/${d.token}" target="_blank" class="action-link">📈 K线</a>
+                <a href="https://basescan.org/tx/${d.tx}" target="_blank" class="action-link">🔗 交易</a>
+            </div>
+        `;
+        document.getElementById('monitor-list').insertBefore(el, document.getElementById('monitor-list').firstChild);
+        if(document.getElementById('monitor-list').children.length > 50) document.getElementById('monitor-list').removeChild(document.getElementById('monitor-list').lastChild);
+        
+        const audio = document.getElementById('audioPlayer');
+        audio.src = SOUNDS['success'];
+        audio.play().catch(()=>{});
+        Toastify({ text: `${d.symbol} - 新 Claim`, duration: 5000, style: { background: "#334155" } }).showToast();
+    }
+    
+    function previewSound() { 
+        const audio = document.getElementById('audioPlayer');
+        audio.src = SOUNDS['success'];
+        audio.play();
+    }
+    init();
+</script>
+</body>
+</html>
