@@ -1,0 +1,2 @@
+# No third-party Python dependencies are required.
+# The app uses the Python standard library plus browser-side JavaScript.
