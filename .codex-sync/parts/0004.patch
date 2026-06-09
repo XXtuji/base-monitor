@@ -1,0 +1,196 @@
++            "affects": ["supply_chain_signal", "news_context"] if symbol in AI_SUPPLY_CHAIN_SYMBOLS else ["news_context"],
++        }
++
++    return {
++        "name": "China market lens",
++        "kind": "china_lens",
++        "kindLabel": "中文视角",
++        "tierLabel": "中文线索",
++        "strength": "Weak",
++        "locale": "zh",
++        "requireCompanyMatch": True,
++        "actionHint": "中文源更适合看国内情绪和转述，结论要回到英文原文核验。",
++        "queries": [
++            f"{chinese} {symbol} 美股 when:14d",
++            f"{chinese} {symbol} 财报 股价 {CHINA_MARKET_NEWS_CONTEXT} when:14d",
++        ],
++        "affects": ["china_context", "news_context"],
++    }
++
++
++def fetch_google_news_profile(symbol, profile_id, limit=10):
++    profile = google_news_profile(profile_id, symbol)
++    profile.update({
++        "official_wires": {"requireTitleMatch": True, "minRelevance": 8},
++        "fast_market": {"requireTitleMatch": True, "minRelevance": 6},
++        "sector_specialists": {"requireTitleMatch": True, "minRelevance": 6},
++        "china_lens": {"requireTitleMatch": True, "minRelevance": 5},
++    }.get(profile_id, {}))
++    queries = profile["queries"]
++    items = []
++    seen = set()
++    parsed_feeds = 0
++    errors = []
++    filtered = 0
++
++    for query_text in queries:
++        try:
++            text = http_text(google_news_url(query_text, profile["locale"]), ttl_seconds=EVIDENCE_CACHE_TTL_SECONDS)
++            root = ET.fromstring(text)
++            parsed_feeds += 1
++        except Exception as exc:
++            errors.append(str(exc)[:120])
++            continue
++
++        for item in root.findall(".//item")[:10]:
++            title = clean_text(item.findtext("title"), 220)
++            link = clean_text(item.findtext("link"), 500)
++            description = clean_text(item.findtext("description"), 260)
++            source_name = clean_text(item.findtext("source"), 80) or "Google News"
++            published = rss_date_to_iso(item.findtext("pubDate"))
++            if not title or not link:
++                continue
++            haystack = f"{title} {description} {source_name}"
++            if profile.get("requireCompanyMatch") and not text_matches_company(haystack, symbol):
++                filtered += 1
++                continue
++            if profile.get("requireTitleMatch") and not title_directly_matches_company(title, symbol):
++                filtered += 1
++                continue
++            if "press release distribution" in haystack.lower():
++                filtered += 1
++                continue
++            relevance_score = news_relevance_score(symbol, profile_id, title, description, source_name)
++            if relevance_score < profile.get("minRelevance", 0):
++                filtered += 1
++                continue
++            if source_quality_score(source_name) < 0 and relevance_score < 9:
++                filtered += 1
++                continue
++
++            title_key = re.sub(r"\W+", "", title.lower())[:180]
++            if title_key in seen or link in seen:
++                continue
++            seen.add(title_key)
++            seen.add(link)
++
++            summary = description or f"Google News matched query: {query_text}."
++            affects = list(dict.fromkeys(profile["affects"] + news_affects(title, summary)))
++            items.append({
++                "title": title,
++                "summary": summary,
++                "source": f"{profile['name']} / {source_name}",
++                "url": link,
++                "date": published,
++                "freshness": freshness_label(published),
++                "strength": profile["strength"],
++                "kind": profile["kind"],
++                "kindLabel": profile["kindLabel"],
++                "tierLabel": profile["tierLabel"],
++                "actionHint": profile.get("actionHint", ""),
++                "affects": affects,
++                "query": query_text,
++                "relevanceScore": relevance_score,
++            })
++            if len(items) >= limit:
++                break
++        if len(items) >= limit:
++            break
++
++    status = "ok" if parsed_feeds else "unavailable"
++    detail = f"{len(queries)} queries: " + "; ".join(queries[:3])
++    if errors and not parsed_feeds:
++        detail = "; ".join(errors[:2])
++    elif errors:
++        detail += f"; partial errors: {len(errors)}"
++    if filtered:
++        detail += f"; filtered low-value: {filtered}"
++    return items[:limit], {"name": profile["name"], "status": status, "count": len(items[:limit]), "detail": detail[:220]}
++
++
++def fetch_google_official_wires(symbol):
++    return fetch_google_news_profile(symbol, "official_wires", limit=8)
++
++
++def fetch_google_fast_market(symbol):
++    return fetch_google_news_profile(symbol, "fast_market", limit=8)
++
++
++def fetch_google_sector_specialists(symbol):
++    return fetch_google_news_profile(symbol, "sector_specialists", limit=14)
++
++
++def fetch_google_china_lens(symbol):
++    return fetch_google_news_profile(symbol, "china_lens", limit=6)
++
++
++def diversified_evidence_items(sorted_items, limit=40):
++    selected = []
++    seen = set()
++
++    def item_key(item):
++        return item.get("url") or item.get("title") or id(item)
++
++    def add_matching(predicate, max_count):
++        added = 0
++        for item in sorted_items:
++            key = item_key(item)
++            if key in seen or not predicate(item):
++                continue
++            selected.append(item)
++            seen.add(key)
++            added += 1
++            if added >= max_count or len(selected) >= limit:
++                break
++
++    add_matching(lambda item: item.get("strength") == "Strong" and item.get("kind") in {"official", "filing"}, 3)
++    add_matching(lambda item: item.get("kind") == "official_wire", 2)
++    add_matching(lambda item: item.get("kind") == "supply_chain", 8)
++    add_matching(lambda item: item.get("kind") == "fast_media", 4)
++    add_matching(lambda item: item.get("kind") == "china_lens", 2)
++    add_matching(lambda item: item.get("kind") == "media", 3)
++    add_matching(lambda item: True, limit - len(selected))
++    return selected[:limit]
++
++
++def localize_evidence_payload_items(items, statuses, symbol):
++    texts = []
++    for item in items:
++        title = item.get("title") or ""
++        summary = item.get("summary") or ""
++        if title:
++            texts.append(title)
++        if summary and summary != title:
++            texts.append(summary)
++    translations = translate_many_to_zh(texts, symbol)
++
++    for item in items:
++        title = clean_text(item.get("title") or "", 520)
++        summary = clean_text(item.get("summary") or "", 520)
++        item["titleZh"] = translations.get(title) or translate_text_to_zh(title, symbol)
++        item["summaryZh"] = translations.get(summary) or translate_text_to_zh(summary, symbol)
++        item["sourceZh"] = source_label_zh(item.get("source"))
++        item["strengthLabel"] = STRENGTH_LABEL_ZH.get(item.get("strength"), item.get("strength") or "待核验")
++        item["freshnessZh"] = freshness_label_zh(item.get("date"))
++        if item.get("kind") == "official":
++            item.setdefault("kindLabel", "官方公告")
++            item.setdefault("tierLabel", "强证据")
++        elif item.get("kind") == "filing":
++            item.setdefault("kindLabel", "监管文件")
++            item.setdefault("tierLabel", "强证据" if item.get("strength") == "Strong" else "跟踪项")
++
++    for status in statuses:
++        status["nameZh"] = SOURCE_NAME_ZH.get(status.get("name"), status.get("name") or "")
++        status["statusZh"] = SOURCE_STATUS_ZH.get(status.get("status"), status.get("status") or "未知")
+ 
+ 
+ def evidence_payload(symbol):
+-    symbol = normalize_symbol(symbol)
++    symbol = resolve_symbol(symbol)
+     key = ("evidence", symbol)
+     cached = cached_value(key, EVIDENCE_CACHE_TTL_SECONDS)
+     if cached is not None:
+@@ -906,6 +1761,11 @@
+     source_fetchers = [
+         fetch_official_sources,
+         fetch_sec_filings,
