@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: serenity-us-stock-terminal
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SERENITY_MONITOR_TTL_SECONDS
+        value: "90"
+      - key: X_BEARER_TOKEN
+        sync: false
