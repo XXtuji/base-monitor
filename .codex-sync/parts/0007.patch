@@ -1,2 +1,0 @@
-   .portfolio-focus { grid-template-columns: 1fr; }
-   .portfolio-focus-ring { justify-content: start; }
