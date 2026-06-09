@@ -7,6 +7,7 @@ import os
 import re
 import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -22,9 +23,16 @@ LONG_CACHE_TTL_SECONDS = 86400
 MONITOR_CACHE_TTL_SECONDS = int(os.environ.get("SERENITY_MONITOR_TTL_SECONDS", "90"))
 YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range}&interval={interval}&includePrePost=false&events=div%2Csplits"
 YAHOO_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
+GOOGLE_NEWS_RSS = "https://news.google.com/rss/search?q={query}&hl={hl}&gl={gl}&ceid={ceid}"
+PRNEWSWIRE_RSS = "https://www.prnewswire.com/rss/news-releases-list.rss"
+GLOBENEWSWIRE_PUBLIC_RSS = "https://www.globenewswire.com/RssFeed/orgclass/1/feedTitle/GlobeNewswire%20-%20News%20about%20Public%20Companies"
 SEC_TICKERS = "https://www.sec.gov/files/company_tickers.json"
 SEC_SUBMISSIONS = "https://data.sec.gov/submissions/CIK{cik}.json"
 X_API_BASE = "https://api.x.com/2"
+MYMEMORY_TRANSLATE = "https://api.mymemory.translated.net/get?q={text}&langpair=en%7Czh-CN"
+TRANSLATE_TO_ZH = os.environ.get("SERENITY_TRANSLATE_ZH", "1").strip().lower() not in {"0", "false", "no"}
+TRANSLATE_TIMEOUT_SECONDS = float(os.environ.get("SERENITY_TRANSLATE_TIMEOUT_SECONDS", "6"))
+TRANSLATE_MAX_WORKERS = int(os.environ.get("SERENITY_TRANSLATE_WORKERS", "6"))
 
 DEFAULT_HEADERS = {
     "accept": "text/html,application/xhtml+xml,application/xml,text/xml,application/json;q=0.9,*/*;q=0.8",
@@ -122,6 +130,287 @@ COMPANY_DOMAINS = {
     "MU": "micron.com",
     "LRCX": "lamresearch.com",
 }
+COMPANY_NEWS_NAMES = {
+    "AAPL": "Apple",
+    "AMD": "AMD",
+    "AMZN": "Amazon",
+    "ASML": "ASML",
+    "AVGO": "Broadcom",
+    "CRWV": "CoreWeave",
+    "GOOG": "Google",
+    "GOOGL": "Google",
+    "INTC": "Intel",
+    "LRCX": "Lam Research",
+    "META": "Meta",
+    "MSFT": "Microsoft",
+    "MU": "Micron",
+    "NVDA": "NVIDIA",
+    "QCOM": "Qualcomm",
+    "SIVE.ST": "Sivers Semiconductors",
+    "TSLA": "Tesla",
+    "TSM": "TSMC",
+    "VRT": "Vertiv",
+}
+COMPANY_CHINESE_NAMES = {
+    "AAPL": "苹果",
+    "AMD": "AMD",
+    "AMZN": "亚马逊",
+    "ASML": "阿斯麦",
+    "AVGO": "博通",
+    "GOOGL": "谷歌",
+    "GOOG": "谷歌",
+    "INTC": "英特尔",
+    "META": "Meta",
+    "MSFT": "微软",
+    "MU": "美光",
+    "NVDA": "英伟达",
+    "QCOM": "高通",
+    "TSLA": "特斯拉",
+    "TSM": "台积电",
+}
+DIRECT_WIRE_RSS_FEEDS = [
+    {"name": "PR Newswire RSS", "url": PRNEWSWIRE_RSS},
+    {"name": "GlobeNewswire RSS", "url": GLOBENEWSWIRE_PUBLIC_RSS},
+]
+FAST_MARKET_NEWS_CONTEXT = "Reuters CNBC Bloomberg MarketWatch Benzinga TheFly Barron's Investor's Business Daily"
+OFFICIAL_WIRE_NEWS_CONTEXT = "site:businesswire.com OR site:globenewswire.com OR site:prnewswire.com"
+CHINA_MARKET_NEWS_CONTEXT = "财联社 华尔街见闻 证券时报 格隆汇 美港电讯 富途 雪球"
+AI_SUPPLY_CHAIN_SYMBOLS = {
+    "NVDA", "AMD", "AVGO", "TSM", "ASML", "MU", "LRCX", "INTC", "QCOM", "CRWV", "VRT", "ANET"
+}
+NEWS_QUERY_OVERRIDES = {
+    "NVDA": [
+        "NVIDIA Korea Samsung SK hynix HBM when:14d",
+        "NVIDIA SK hynix Naver Doosan South Korea AI data centers when:14d",
+        "NVIDIA Samsung HBM foundry Korea when:14d",
+        "NVDA OR NVIDIA stock when:14d",
+    ],
+    "AMD": [
+        "AMD AI GPU MI300 MI350 data center when:14d",
+        "AMD OR Advanced Micro Devices stock when:14d",
+    ],
+    "AVGO": [
+        "Broadcom AI custom silicon ASIC stock when:14d",
+        "AVGO OR Broadcom stock when:14d",
+    ],
+    "MU": [
+        "Micron HBM memory AI stock when:14d",
+        "MU OR Micron stock when:14d",
+    ],
+    "QCOM": [
+        "Qualcomm Snapdragon AI chip stock when:14d",
+        "QCOM OR Qualcomm stock when:14d",
+    ],
+    "TSM": [
+        "TSMC CoWoS AI chip capacity stock when:14d",
+        "TSM OR TSMC stock when:14d",
+    ],
+}
+SUPPLY_CHAIN_NEWS_TERMS = (
+    "ai factory",
+    "co-packaged",
+    "cowos",
+    "data center",
+    "foundry",
+    "hbm",
+    "korea",
+    "memory",
+    "samsung",
+    "sk hynix",
+    "supplier",
+    "supply",
+    "taiwan",
+    "tsmc",
+)
+TRUSTED_NEWS_SOURCES = (
+    "reuters",
+    "bloomberg",
+    "cnbc",
+    "marketwatch",
+    "barron's",
+    "investor's business daily",
+    "business wire",
+    "pr newswire",
+    "globenewswire",
+    "nasdaq",
+)
+SPECIALIST_NEWS_SOURCES = (
+    "digitimes",
+    "thelec",
+    "the korea herald",
+    "the korea times",
+    "trendforce",
+    "nikkei asia",
+    "ked global",
+    "siliconangle",
+    "blocks & files",
+    "techzine",
+    "seeking alpha",
+    "marketscreener",
+    "tradingview",
+)
+NOISY_NEWS_SOURCES = (
+    "stocktwits",
+    "24/7 wall st",
+    "barchart",
+    "mshale",
+    "gotrade",
+    "let's data science",
+    "the american bazaar",
+    "mezha",
+    "104.1 wiky",
+    "marketwise",
+    "tradingkey",
+    "quiver quantitative",
+)
+LOW_VALUE_NEWS_PATTERNS = (
+    r"\bwill trade at this price\b",
+    r"\bprice prediction\b",
+    r"\bshould you buy\b",
+    r"\bshould investors buy\b",
+    r"\bbest stocks?\b",
+    r"\b3 stocks?\b",
+    r"\bthree stocks?\b",
+    r"\btop stocks?\b",
+    r"\b10-baggers?\b",
+    r"\bget exposure to\b",
+    r"\bwithout actually buying\b",
+    r"\bbiggest analyst calls\b",
+    r"\bstocks? making (?:the )?biggest moves\b",
+    r"\bbiggest moves\b",
+    r"\bpremarket\b",
+    r"\bstock fans\b",
+    r"\bmark your calendars\b",
+    r"\bgenerational entry point\b",
+    r"\bvalue trap\b",
+    r"\bexplains? the market today\b",
+    r"\bkeeping traders engaged\b",
+    r"\bstock bob\b",
+    r"\bstock underperforms\b",
+    r"\bstock outperforms competitors\b",
+    r"\bstock .*performs competitors\b",
+    r"\bwhich .* stock wins\b",
+    r"\bwhich .* wins now\b",
+    r"\byoutube\b",
+    r"\bfake .*endorsement video\b",
+    r"\betfs? announces? distributions?\b",
+    r"\byieldmax\b",
+    r"\bweekly distributions?\b",
+    r"\bdividend reports?\b",
+)
+MATERIAL_NEWS_PATTERNS = (
+    r"\border\b",
+    r"\bcontract\b",
+    r"\bdeal\b",
+    r"\bpartnership\b",
+    r"\bcollaboration\b",
+    r"\bcustomer\b",
+    r"\bproduction\b",
+    r"\bsupply\b",
+    r"\bsupplier\b",
+    r"\bshipment\b",
+    r"\bdata centers?\b",
+    r"\bai infrastructure\b",
+    r"\bhbm\b",
+    r"\bfoundry\b",
+    r"\bmemory\b",
+    r"\bearnings?\b",
+    r"\brevenue\b",
+    r"\bguidance\b",
+    r"\bbacklog\b",
+    r"\bsecures?\b",
+    r"\blaunch(?:es|ed)?\b",
+    r"\bunveils?\b",
+    r"\bexport controls?\b",
+    r"\bclass action\b",
+    r"\binvestigation\b",
+    r"\binsider\b",
+    r"\bsells? shares?\b",
+)
+ECOSYSTEM_ONLY_PATTERNS = (
+    r"\bpowered by nvidia\b",
+    r"\bnvidia mgx\b",
+    r"\bnvidia omniverse\b",
+    r"\bnvidia isaac\b",
+    r"\bnvidia nvlink fusion\b",
+    r"\bnvidia dsx\b",
+    r"\bnvidia[- ]powered\b",
+    r"\bnvidia ecosystem\b",
+    r"\bnvidia reference\b",
+)
+STRENGTH_LABEL_ZH = {
+    "Strong": "强证据",
+    "Medium": "中等线索",
+    "Weak": "弱线索",
+    "Needs checking": "待核验",
+}
+SOURCE_STATUS_ZH = {
+    "ok": "已连接",
+    "unavailable": "不可用",
+    "not_found": "未找到",
+    "not_applicable": "不适用",
+    "not_configured": "手动源",
+    "needs_token": "等待 Token",
+}
+SOURCE_NAME_ZH = {
+    "Official/IR curated": "官方/IR 精选",
+    "SEC EDGAR": "SEC 监管文件",
+    "Press release RSS": "新闻稿 RSS",
+    "Official wires via Google": "新闻稿聚合",
+    "Sector specialist news": "行业/供应链新闻",
+    "Fast market media": "快讯媒体",
+    "China market lens": "中文视角",
+    "Yahoo Finance RSS": "雅虎财经 RSS",
+}
+OUTLET_NAME_ZH = {
+    "Reuters": "路透",
+    "Bloomberg": "彭博",
+    "CNBC": "CNBC",
+    "Barron's": "巴伦周刊",
+    "Investor's Business Daily": "投资者商业日报",
+    "Business Wire": "Business Wire",
+    "PR Newswire": "美通社",
+    "GlobeNewswire": "GlobeNewswire",
+    "Nasdaq press release": "纳斯达克新闻稿",
+    "SEC EDGAR": "SEC EDGAR",
+    "Sivers official": "Sivers 官方",
+    "digitimes": "DigiTimes",
+    "thelec.net": "The Elec",
+    "The Korea Herald": "韩国先驱报",
+    "The Korea Times": "韩国时报",
+    "SiliconANGLE": "SiliconANGLE",
+    "Techzine Global": "Techzine",
+    "Yahoo Finance": "雅虎财经",
+    "MarketWatch": "MarketWatch",
+    "Seeking Alpha": "Seeking Alpha",
+    "marketscreener.com": "MarketScreener",
+    "TradingView": "TradingView",
+    "MSN": "MSN",
+}
+TRANSLATION_REPLACEMENTS = (
+    ("NVIDIA", "英伟达"),
+    ("Nvidia", "英伟达"),
+    ("Qualcomm", "高通"),
+    ("Samsung", "三星"),
+    ("SK Hynix", "SK海力士"),
+    ("SK hynix", "SK海力士"),
+    ("Micron", "美光"),
+    ("Foundry", "晶圆代工"),
+    ("foundry", "晶圆代工"),
+    ("data centres", "数据中心"),
+    ("data centers", "数据中心"),
+    ("AI infrastructure", "AI 基础设施"),
+    ("partnership", "合作"),
+    ("Partnership", "合作"),
+    ("collaboration", "合作"),
+    ("Collaboration", "合作"),
+    ("PACT", "合作"),
+    ("pact", "合作"),
+    ("not listed", "未列出"),
+    ("CEO", "CEO"),
+    ("memory race", "存储竞争"),
+    ("Memory Race", "存储竞争"),
+)
 COMPANY_BADGE_LABELS = {
     "BRK-A": "BH",
 }
@@ -639,6 +928,122 @@ def freshness_label(value):
     return f"{days // 30}mo"
 
 
+def freshness_label_zh(value):
+    ts = parse_date_to_ts(value)
+    if not ts:
+        return "时间待核验"
+    days = max(0, int((time.time() - ts) / 86400))
+    if days == 0:
+        return "今天"
+    if days <= 45:
+        return f"{days}天前"
+    months = max(1, days // 30)
+    return f"{months}个月前"
+
+
+def has_chinese(text):
+    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+
+
+def needs_translation_to_zh(text):
+    if not TRANSLATE_TO_ZH or not text:
+        return False
+    return bool(re.search(r"[A-Za-z]", text)) and not has_chinese(text)
+
+
+def postprocess_zh_translation(text):
+    value = html.unescape(text or "").strip()
+    value = re.sub(r"\s+", " ", value)
+    for src, dst in TRANSLATION_REPLACEMENTS:
+        value = value.replace(src, dst)
+    value = value.replace(" - ", " - ")
+    return value
+
+
+def local_translate_to_zh(text, symbol=""):
+    value = clean_text(text, 520)
+    filing = re.match(r"^([A-Z0-9.\-=]+)\s+([A-Z0-9\- ]+)\s+filed\s+(\d{4}-\d{2}-\d{2})$", value)
+    if filing:
+        return f"{filing.group(1)} 于 {filing.group(3)} 提交 {filing.group(2).strip()}"
+
+    sec = re.match(
+        r"^Official SEC filing for (.+?)\. Report date: ([^.]+)\. Primary doc: ([^.]+)\.$",
+        value,
+    )
+    if sec:
+        report_date = "未列出" if sec.group(2).strip().lower() == "not listed" else sec.group(2)
+        return f"{sec.group(1)} 的官方 SEC 文件。报告期：{report_date}。主文件：{sec.group(3)}。"
+
+    if value == "Yahoo Finance headline feed item.":
+        return "雅虎财经标题流条目。"
+    return ""
+
+
+def translate_text_to_zh(text, symbol=""):
+    value = clean_text(text, 520)
+    if not value:
+        return ""
+    local = local_translate_to_zh(value, symbol)
+    if local:
+        return local
+    if not needs_translation_to_zh(value):
+        return value
+
+    cache_key = ("translate-zh", hashlib.sha256(value.encode("utf-8")).hexdigest())
+    cached = cached_value(cache_key, LONG_CACHE_TTL_SECONDS * 7)
+    if cached is not None:
+        return cached
+
+    try:
+        url = MYMEMORY_TRANSLATE.format(text=quote(value[:480], safe=""))
+        req = Request(url, headers={**DEFAULT_HEADERS, "accept": "application/json"})
+        with urlopen(req, timeout=TRANSLATE_TIMEOUT_SECONDS) as res:
+            payload = json.loads(res.read().decode("utf-8", errors="replace"))
+        translated = ((payload.get("responseData") or {}).get("translatedText") or "").strip()
+        if not translated or translated.lower() == value.lower():
+            translated = value
+        translated = postprocess_zh_translation(translated)
+    except Exception:
+        translated = value
+    return store_cached_value(cache_key, translated)
+
+
+def translate_many_to_zh(texts, symbol=""):
+    unique = []
+    seen = set()
+    results = {}
+    for text in texts:
+        value = clean_text(text, 520)
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        local = local_translate_to_zh(value, symbol)
+        if local or not needs_translation_to_zh(value):
+            results[value] = local or value
+        else:
+            unique.append(value)
+
+    if unique:
+        workers = max(1, min(TRANSLATE_MAX_WORKERS, len(unique)))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(translate_text_to_zh, value, symbol): value for value in unique}
+            for future in as_completed(futures):
+                value = futures[future]
+                try:
+                    results[value] = future.result()
+                except Exception:
+                    results[value] = value
+    return results
+
+
+def source_label_zh(source):
+    value = source or ""
+    if " / " in value:
+        prefix, outlet = value.split(" / ", 1)
+        return f"{SOURCE_NAME_ZH.get(prefix, prefix)} / {OUTLET_NAME_ZH.get(outlet, outlet)}"
+    return SOURCE_NAME_ZH.get(value, OUTLET_NAME_ZH.get(value, value))
+
+
 def interval_for_range(range_value):
     if range_value in {"1d", "5d"}:
         return "5m"
@@ -846,6 +1251,9 @@ def fetch_sec_filings(symbol, limit=8):
             "freshness": freshness_label(filing_date),
             "strength": "Strong" if is_major else "Medium",
             "kind": "filing",
+            "kindLabel": "监管文件",
+            "tierLabel": "强证据" if is_major else "跟踪项",
+            "actionHint": "监管文件可信度最高，重点看 8-K/10-Q/10-K 的收入、风险和管理层表述。",
             "form": form,
             "affects": ["risk_check", "financial_validation"],
             "sortTs": parse_date_to_ts(filing_date),
@@ -873,12 +1281,19 @@ def fetch_yahoo_rss(symbol, limit=8):
     text = http_text(url, ttl_seconds=EVIDENCE_CACHE_TTL_SECONDS)
     root = ET.fromstring(text)
     items = []
+    filtered = 0
     for item in root.findall(".//item")[:limit]:
         title = clean_text(item.findtext("title"), 220)
         link = clean_text(item.findtext("link"), 500)
         description = clean_text(item.findtext("description"), 260)
         published = rss_date_to_iso(item.findtext("pubDate"))
         if not title or not link:
+            continue
+        if not title_directly_matches_company(title, symbol):
+            filtered += 1
+            continue
+        if news_relevance_score(symbol, "yahoo_rss", title, description, "Yahoo Finance RSS") < 5:
+            filtered += 1
             continue
         items.append({
             "title": title,
@@ -889,13 +1304,453 @@ def fetch_yahoo_rss(symbol, limit=8):
             "freshness": freshness_label(published),
             "strength": "Medium",
             "kind": "media",
+            "kindLabel": "泛新闻",
+            "tierLabel": "低权重",
+            "actionHint": "泛新闻只当背景，先确认是否直接影响当前标的。",
             "affects": ["news_context"],
         })
-    return items, {"name": "Yahoo Finance RSS", "status": "ok", "count": len(items)}
+    return items, {"name": "Yahoo Finance RSS", "status": "ok", "count": len(items), "detail": f"filtered low-value: {filtered}"}
+
+
+def company_search_terms(symbol):
+    company = COMPANY_NEWS_NAMES.get(symbol, symbol)
+    chinese = COMPANY_CHINESE_NAMES.get(symbol, "")
+    terms = [symbol, company]
+    if chinese:
+        terms.append(chinese)
+    return [term for term in terms if term]
+
+
+def text_matches_company(text, symbol):
+    if not text:
+        return False
+    lower = text.lower()
+    for term in company_search_terms(symbol):
+        if not term:
+            continue
+        if term.isascii() and len(term) <= 5:
+            pattern = rf"(?<![A-Z0-9]){re.escape(term.upper())}(?![A-Z0-9])"
+            if re.search(pattern, text.upper()):
+                return True
+        elif term.lower() in lower:
+                return True
+    return False
+
+
+def source_quality_score(source_name):
+    source = (source_name or "").lower()
+    if any(name in source for name in TRUSTED_NEWS_SOURCES):
+        return 3
+    if any(name in source for name in SPECIALIST_NEWS_SOURCES):
+        return 2
+    if any(name in source for name in NOISY_NEWS_SOURCES):
+        return -3
+    return 0
+
+
+def title_directly_matches_company(title, symbol):
+    return text_matches_company(title or "", symbol)
+
+
+def broad_multi_stock_penalty(title, symbol):
+    title_upper = (title or "").upper()
+    title_lower = (title or "").lower()
+    mentions = set()
+    for ticker, company in COMPANY_NEWS_NAMES.items():
+        if ticker == symbol:
+            continue
+        if len(ticker) <= 5 and re.search(rf"(?<![A-Z0-9]){re.escape(ticker)}(?![A-Z0-9])", title_upper):
+            mentions.add(ticker)
+        if company and company.lower() in title_lower:
+            mentions.add(ticker)
+    if len(mentions) >= 3:
+        return 4
+    if len(mentions) >= 2 and "," in (title or ""):
+        return 2
+    return 0
+
+
+def pattern_count(patterns, text, cap=3):
+    count = 0
+    for pattern in patterns:
+        if re.search(pattern, text, re.I):
+            count += 1
+            if count >= cap:
+                break
+    return count
+
+
+def news_relevance_score(symbol, profile_id, title, summary, source_name):
+    haystack = f"{title or ''} {summary or ''} {source_name or ''}"
+    lower = haystack.lower()
+    score = 0
+
+    if title_directly_matches_company(title, symbol):
+        score += 4
+    elif text_matches_company(summary, symbol):
+        score += 1
+
+    score += source_quality_score(source_name)
+    score += min(pattern_count(MATERIAL_NEWS_PATTERNS, lower), 3) * 2
+
+    if any(term in lower for term in SUPPLY_CHAIN_NEWS_TERMS):
+        score += 2
+    if profile_id == "sector_specialists" and "supply_chain_signal" in news_affects(title, summary):
+        score += 2
+    if profile_id == "official_wires" and any(re.search(pattern, lower, re.I) for pattern in ECOSYSTEM_ONLY_PATTERNS):
+        if not (title or "").lower().strip().startswith(COMPANY_NEWS_NAMES.get(symbol, symbol).lower()):
+            score -= 5
+
+    score -= pattern_count(LOW_VALUE_NEWS_PATTERNS, lower, cap=2) * 6
+    score -= broad_multi_stock_penalty(title, symbol)
+    return score
+
+
+def fetch_press_release_rss(symbol, limit=8):
+    items = []
+    feed_status = []
+    seen = set()
+    filtered = 0
+
+    for feed in DIRECT_WIRE_RSS_FEEDS:
+        try:
+            text = http_text(feed["url"], ttl_seconds=EVIDENCE_CACHE_TTL_SECONDS)
+            root = ET.fromstring(text)
+        except Exception as exc:
+            feed_status.append(f"{feed['name']}:down:{str(exc)[:80]}")
+            continue
+
+        matched = 0
+        for item in root.findall(".//item")[:80]:
+            title = clean_text(item.findtext("title"), 220)
+            link = clean_text(item.findtext("link"), 500)
+            description = clean_text(item.findtext("description"), 280)
+            published = rss_date_to_iso(item.findtext("pubDate"))
+            haystack = f"{title} {description}"
+            if not title or not link or not title_directly_matches_company(title, symbol):
+                filtered += 1
+                continue
+            if news_relevance_score(symbol, "press_release_rss", title, description, feed["name"]) < 6:
+                filtered += 1
+                continue
+
+            key = link or title
+            if key in seen:
+                continue
+            seen.add(key)
+            matched += 1
+            items.append({
+                "title": title,
+                "summary": description or f"{feed['name']} company news release.",
+                "source": feed["name"],
+                "url": link,
+                "date": published,
+                "freshness": freshness_label(published),
+                "strength": "Strong",
+                "kind": "official_wire",
+                "kindLabel": "官方新闻稿",
+                "tierLabel": "强证据",
+                "actionHint": "先读原文，确认是否公司本身公告、订单、财报或监管披露。",
+                "affects": ["official_disclosure", "news_context"],
+            })
+            if len(items) >= limit:
+                break
+        feed_status.append(f"{feed['name']}:{matched}")
+        if len(items) >= limit:
+            break
+
+    return items[:limit], {
+        "name": "Press release RSS",
+        "status": "ok" if feed_status else "unavailable",
+        "count": len(items[:limit]),
+        "detail": (f"{'; '.join(feed_status)}; filtered low-value: {filtered}")[:220],
+    }
+
+
+def base_google_query(symbol, days=7):
+    company = COMPANY_NEWS_NAMES.get(symbol, symbol)
+    if company != symbol:
+        return f"{symbol} OR {company} stock when:{days}d"
+    return f"{symbol} stock when:{days}d"
+
+
+def google_news_queries(symbol):
+    queries = list(NEWS_QUERY_OVERRIDES.get(symbol, []))
+    queries.append(base_google_query(symbol, 14))
+
+    unique = []
+    seen = set()
+    for query in queries:
+        key = query.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(query)
+    return unique[:5]
+
+
+def google_news_url(query_text, locale="en"):
+    if locale == "zh":
+        hl = "zh-CN"
+        ceid = "US:zh-Hans"
+    else:
+        hl = "en-US"
+        ceid = "US:en"
+    return GOOGLE_NEWS_RSS.format(
+        query=quote(query_text, safe=""),
+        hl=hl,
+        gl="US",
+        ceid=quote(ceid, safe=":"),
+    )
+
+
+def news_affects(title, summary):
+    text = f"{title} {summary}".lower()
+    affects = ["news_context"]
+    if any(term in text for term in SUPPLY_CHAIN_NEWS_TERMS):
+        affects.insert(0, "supply_chain_signal")
+    return affects
+
+
+def google_news_profile(profile_id, symbol):
+    company = COMPANY_NEWS_NAMES.get(symbol, symbol)
+    chinese = COMPANY_CHINESE_NAMES.get(symbol, company)
+
+    if profile_id == "official_wires":
+        return {
+            "name": "Official wires via Google",
+            "kind": "official_wire",
+            "kindLabel": "新闻稿聚合",
+            "tierLabel": "需核验发行方",
+            "strength": "Medium",
+            "locale": "en",
+            "requireCompanyMatch": True,
+            "actionHint": "新闻稿聚合要看发行方是谁；不是公司本身公告时，只当产业线索。",
+            "queries": [
+                f"{company} OR {symbol} {OFFICIAL_WIRE_NEWS_CONTEXT} when:14d",
+            ],
+            "affects": ["press_wire_context", "news_context"],
+        }
+
+    if profile_id == "fast_market":
+        return {
+            "name": "Fast market media",
+            "kind": "fast_media",
+            "kindLabel": "快讯媒体",
+            "tierLabel": "快线索",
+            "strength": "Medium",
+            "locale": "en",
+            "requireCompanyMatch": True,
+            "actionHint": "快讯适合看催化和情绪，不要单凭标题追涨。",
+            "queries": [
+                base_google_query(symbol, 7),
+                f"{company} stock Reuters OR CNBC OR Bloomberg OR MarketWatch OR Benzinga when:7d",
+            ],
+            "affects": ["news_context", "market_reaction"],
+        }
+
+    if profile_id == "sector_specialists":
+        sector_queries = google_news_queries(symbol)
+        if symbol not in AI_SUPPLY_CHAIN_SYMBOLS:
+            sector_queries = [f"{base_google_query(symbol, 14)} earnings guidance analyst"]
+        return {
+            "name": "Sector specialist news",
+            "kind": "supply_chain",
+            "kindLabel": "半导体供应链" if symbol in AI_SUPPLY_CHAIN_SYMBOLS else "行业专项",
+            "tierLabel": "产业线索",
+            "strength": "Medium",
+            "locale": "en",
+            "requireCompanyMatch": True,
+            "actionHint": "供应链新闻先看客户、金额、产能、时间点，再回到价格位置。",
+            "queries": sector_queries[:3],
+            "affects": ["supply_chain_signal", "news_context"] if symbol in AI_SUPPLY_CHAIN_SYMBOLS else ["news_context"],
+        }
+
+    return {
+        "name": "China market lens",
+        "kind": "china_lens",
+        "kindLabel": "中文视角",
+        "tierLabel": "中文线索",
+        "strength": "Weak",
+        "locale": "zh",
+        "requireCompanyMatch": True,
+        "actionHint": "中文源更适合看国内情绪和转述，结论要回到英文原文核验。",
+        "queries": [
+            f"{chinese} {symbol} 美股 when:14d",
+            f"{chinese} {symbol} 财报 股价 {CHINA_MARKET_NEWS_CONTEXT} when:14d",
+        ],
+        "affects": ["china_context", "news_context"],
+    }
+
+
+def fetch_google_news_profile(symbol, profile_id, limit=10):
+    profile = google_news_profile(profile_id, symbol)
+    profile.update({
+        "official_wires": {"requireTitleMatch": True, "minRelevance": 8},
+        "fast_market": {"requireTitleMatch": True, "minRelevance": 6},
+        "sector_specialists": {"requireTitleMatch": True, "minRelevance": 6},
+        "china_lens": {"requireTitleMatch": True, "minRelevance": 5},
+    }.get(profile_id, {}))
+    queries = profile["queries"]
+    items = []
+    seen = set()
+    parsed_feeds = 0
+    errors = []
+    filtered = 0
+
+    for query_text in queries:
+        try:
+            text = http_text(google_news_url(query_text, profile["locale"]), ttl_seconds=EVIDENCE_CACHE_TTL_SECONDS)
+            root = ET.fromstring(text)
+            parsed_feeds += 1
+        except Exception as exc:
+            errors.append(str(exc)[:120])
+            continue
+
+        for item in root.findall(".//item")[:10]:
+            title = clean_text(item.findtext("title"), 220)
+            link = clean_text(item.findtext("link"), 500)
+            description = clean_text(item.findtext("description"), 260)
+            source_name = clean_text(item.findtext("source"), 80) or "Google News"
+            published = rss_date_to_iso(item.findtext("pubDate"))
+            if not title or not link:
+                continue
+            haystack = f"{title} {description} {source_name}"
+            if profile.get("requireCompanyMatch") and not text_matches_company(haystack, symbol):
+                filtered += 1
+                continue
+            if profile.get("requireTitleMatch") and not title_directly_matches_company(title, symbol):
+                filtered += 1
+                continue
+            if "press release distribution" in haystack.lower():
+                filtered += 1
+                continue
+            relevance_score = news_relevance_score(symbol, profile_id, title, description, source_name)
+            if relevance_score < profile.get("minRelevance", 0):
+                filtered += 1
+                continue
+            if source_quality_score(source_name) < 0 and relevance_score < 9:
+                filtered += 1
+                continue
+
+            title_key = re.sub(r"\W+", "", title.lower())[:180]
+            if title_key in seen or link in seen:
+                continue
+            seen.add(title_key)
+            seen.add(link)
+
+            summary = description or f"Google News matched query: {query_text}."
+            affects = list(dict.fromkeys(profile["affects"] + news_affects(title, summary)))
+            items.append({
+                "title": title,
+                "summary": summary,
+                "source": f"{profile['name']} / {source_name}",
+                "url": link,
+                "date": published,
+                "freshness": freshness_label(published),
+                "strength": profile["strength"],
+                "kind": profile["kind"],
+                "kindLabel": profile["kindLabel"],
+                "tierLabel": profile["tierLabel"],
+                "actionHint": profile.get("actionHint", ""),
+                "affects": affects,
+                "query": query_text,
+                "relevanceScore": relevance_score,
+            })
+            if len(items) >= limit:
+                break
+        if len(items) >= limit:
+            break
+
+    status = "ok" if parsed_feeds else "unavailable"
+    detail = f"{len(queries)} queries: " + "; ".join(queries[:3])
+    if errors and not parsed_feeds:
+        detail = "; ".join(errors[:2])
+    elif errors:
+        detail += f"; partial errors: {len(errors)}"
+    if filtered:
+        detail += f"; filtered low-value: {filtered}"
+    return items[:limit], {"name": profile["name"], "status": status, "count": len(items[:limit]), "detail": detail[:220]}
+
+
+def fetch_google_official_wires(symbol):
+    return fetch_google_news_profile(symbol, "official_wires", limit=8)
+
+
+def fetch_google_fast_market(symbol):
+    return fetch_google_news_profile(symbol, "fast_market", limit=8)
+
+
+def fetch_google_sector_specialists(symbol):
+    return fetch_google_news_profile(symbol, "sector_specialists", limit=14)
+
+
+def fetch_google_china_lens(symbol):
+    return fetch_google_news_profile(symbol, "china_lens", limit=6)
+
+
+def diversified_evidence_items(sorted_items, limit=40):
+    selected = []
+    seen = set()
+
+    def item_key(item):
+        return item.get("url") or item.get("title") or id(item)
+
+    def add_matching(predicate, max_count):
+        added = 0
+        for item in sorted_items:
+            key = item_key(item)
+            if key in seen or not predicate(item):
+                continue
+            selected.append(item)
+            seen.add(key)
+            added += 1
+            if added >= max_count or len(selected) >= limit:
+                break
+
+    add_matching(lambda item: item.get("strength") == "Strong" and item.get("kind") in {"official", "filing"}, 3)
+    add_matching(lambda item: item.get("kind") == "official_wire", 2)
+    add_matching(lambda item: item.get("kind") == "supply_chain", 8)
+    add_matching(lambda item: item.get("kind") == "fast_media", 4)
+    add_matching(lambda item: item.get("kind") == "china_lens", 2)
+    add_matching(lambda item: item.get("kind") == "media", 3)
+    add_matching(lambda item: True, limit - len(selected))
+    return selected[:limit]
+
+
+def localize_evidence_payload_items(items, statuses, symbol):
+    texts = []
+    for item in items:
+        title = item.get("title") or ""
+        summary = item.get("summary") or ""
+        if title:
+            texts.append(title)
+        if summary and summary != title:
+            texts.append(summary)
+    translations = translate_many_to_zh(texts, symbol)
+
+    for item in items:
+        title = clean_text(item.get("title") or "", 520)
+        summary = clean_text(item.get("summary") or "", 520)
+        item["titleZh"] = translations.get(title) or translate_text_to_zh(title, symbol)
+        item["summaryZh"] = translations.get(summary) or translate_text_to_zh(summary, symbol)
+        item["sourceZh"] = source_label_zh(item.get("source"))
+        item["strengthLabel"] = STRENGTH_LABEL_ZH.get(item.get("strength"), item.get("strength") or "待核验")
+        item["freshnessZh"] = freshness_label_zh(item.get("date"))
+        if item.get("kind") == "official":
+            item.setdefault("kindLabel", "官方公告")
+            item.setdefault("tierLabel", "强证据")
+        elif item.get("kind") == "filing":
+            item.setdefault("kindLabel", "监管文件")
+            item.setdefault("tierLabel", "强证据" if item.get("strength") == "Strong" else "跟踪项")
+
+    for status in statuses:
+        status["nameZh"] = SOURCE_NAME_ZH.get(status.get("name"), status.get("name") or "")
+        status["statusZh"] = SOURCE_STATUS_ZH.get(status.get("status"), status.get("status") or "未知")
 
 
 def evidence_payload(symbol):
-    symbol = normalize_symbol(symbol)
+    symbol = resolve_symbol(symbol)
     key = ("evidence", symbol)
     cached = cached_value(key, EVIDENCE_CACHE_TTL_SECONDS)
     if cached is not None:
@@ -906,6 +1761,11 @@ def evidence_payload(symbol):
     source_fetchers = [
         fetch_official_sources,
         fetch_sec_filings,
+        fetch_press_release_rss,
+        fetch_google_official_wires,
+        fetch_google_sector_specialists,
+        fetch_google_fast_market,
+        fetch_google_china_lens,
         fetch_yahoo_rss,
     ]
     for fetcher in source_fetchers:
@@ -925,13 +1785,34 @@ def evidence_payload(symbol):
         seen.add(url)
         item["sortTs"] = parse_date_to_ts(item.get("date"))
         item["sortStrength"] = {"Strong": 3, "Medium": 2, "Weak": 1}.get(item.get("strength"), 0)
-        item["sortKind"] = {"official": 3, "filing": 3, "media": 1}.get(item.get("kind"), 0)
+        item["sortSignal"] = 1 if "supply_chain_signal" in (item.get("affects") or []) else 0
+        item["sortRelevance"] = item.get("relevanceScore") or 0
+        item["sortKind"] = {
+            "official": 5,
+            "filing": 5,
+            "official_wire": 4,
+            "supply_chain": 3,
+            "fast_media": 2,
+            "china_lens": 1,
+            "media": 1,
+        }.get(item.get("kind"), 0)
         deduped.append(item)
-    deduped.sort(key=lambda item: (item.get("sortStrength") or 0, item.get("sortKind") or 0, item.get("sortTs") or 0), reverse=True)
-    for item in deduped:
+    deduped.sort(key=lambda item: (
+        item.get("sortStrength") or 0,
+        item.get("sortSignal") or 0,
+        item.get("sortKind") or 0,
+        item.get("sortRelevance") or 0,
+        item.get("sortTs") or 0,
+    ), reverse=True)
+    display_items = diversified_evidence_items(deduped)
+    for item in display_items:
         item.pop("sortTs", None)
         item.pop("sortStrength", None)
+        item.pop("sortSignal", None)
+        item.pop("sortRelevance", None)
         item.pop("sortKind", None)
+
+    localize_evidence_payload_items(display_items, statuses, symbol)
 
     counts = {"Strong": 0, "Medium": 0, "Weak": 0, "Needs checking": 0}
     for item in deduped:
@@ -942,7 +1823,7 @@ def evidence_payload(symbol):
         "symbol": symbol,
         "fetchedAt": now_iso(),
         "cacheTtlSeconds": EVIDENCE_CACHE_TTL_SECONDS,
-        "items": deduped[:18],
+        "items": display_items,
         "counts": counts,
         "sources": statuses,
     }

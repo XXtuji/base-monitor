@@ -694,6 +694,12 @@ const fmtUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "US
 const fmtCny = new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 2 });
 const fmtPct = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 const fmtCompact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+const STRENGTH_LABELS = {
+  Strong: "强证据",
+  Medium: "中等线索",
+  Weak: "弱线索",
+  "Needs checking": "待核验"
+};
 const fmtDate = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" });
 const fmtEvidenceDate = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 
@@ -1898,12 +1904,13 @@ function evidenceClass(strength) {
 
 function sourceStatusLabel(status) {
   return {
-    ok: "live",
-    unavailable: "down",
-    not_found: "no CIK",
-    not_applicable: "n/a",
-    not_configured: "manual"
-  }[status] || status || "unknown";
+    ok: "已连接",
+    unavailable: "不可用",
+    not_found: "未找到",
+    not_applicable: "不适用",
+    not_configured: "手动源",
+    needs_token: "等待 Token"
+  }[status] || status || "未知";
 }
 
 function renderEvidence(p, liveEvidence = null) {
@@ -1919,16 +1926,20 @@ function renderEvidence(p, liveEvidence = null) {
     </div>
   ` : "";
   const fetched = liveEvidence?.fetchedAt ? formatEvidenceDate(liveEvidence.fetchedAt) : "等待 live evidence";
-  const liveMarkup = liveItems.length ? liveItems.slice(0, 10).map(item => {
+  const liveMarkup = liveItems.length ? liveItems.slice(0, 22).map(item => {
     const cls = evidenceClass(item.strength);
+    const baseKindLabel = item.kindLabel || item.kind || "source";
+    const kindLabel = item.tierLabel ? `${baseKindLabel} · ${item.tierLabel}` : baseKindLabel;
+    const actionHint = item.actionHint ? `<div class="evidence-action">${escapeHtml(item.actionHint)}</div>` : "";
     return `
       <div class="evidence-item live ${cls}">
         <div class="evidence-title-row">
-          <span class="strength">${escapeHtml(item.strength || "Needs checking")}</span>
-          <span class="evidence-kind">${escapeHtml(item.kind || "source")}</span>
+          <span class="strength">${escapeHtml(item.strengthLabel || item.strength || "待核验")}</span>
+          <span class="evidence-kind">${escapeHtml(kindLabel)}</span>
         </div>
-        <a class="evidence-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
-        <p>${escapeHtml(item.summary || "")}</p>
+        <a class="evidence-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.titleZh || item.title)}</a>
+        <p>${escapeHtml(item.summaryZh || item.summary || "")}</p>
+        ${actionHint}
         <div class="evidence-meta">${escapeHtml(item.source)} · ${escapeHtml(formatEvidenceDate(item.date))} · ${escapeHtml(item.freshness || "")}</div>
       </div>
     `;
@@ -1951,6 +1962,65 @@ function renderEvidence(p, liveEvidence = null) {
     ${liveMarkup}
     <div class="evidence-feed-head local-head">
       <strong>Local Serenity notes</strong>
+      <span>启发式假设</span>
+    </div>
+    ${localMarkup}
+  `;
+  el.killSwitches.innerHTML = p.weaken.map((item, idx) => `
+    <div class="kill-item"><strong>${idx + 1}. ${escapeHtml(item)}</strong><p>触发后降低研究优先级，重新检查估值和证据链。</p></div>
+  `).join("");
+}
+
+function renderEvidence(p, liveEvidence = null) {
+  const sources = liveEvidence?.sources || [];
+  const liveItems = liveEvidence?.items || [];
+  const sourceStrip = sources.length ? `
+    <div class="source-strip">
+      ${sources.map(source => `
+        <span class="source-pill ${escapeHtml(source.status)}" title="${escapeHtml(source.detail || "")}">
+          ${escapeHtml(source.nameZh || source.name)} · ${escapeHtml(source.statusZh || sourceStatusLabel(source.status))} · ${source.count || 0}
+        </span>
+      `).join("")}
+    </div>
+  ` : "";
+  const fetched = liveEvidence?.fetchedAt ? formatEvidenceDate(liveEvidence.fetchedAt) : "等待实时证据";
+  const liveMarkup = liveItems.length ? liveItems.slice(0, 22).map(item => {
+    const cls = evidenceClass(item.strength);
+    const baseKindLabel = item.kindLabel || item.kind || "来源";
+    const kindLabel = item.tierLabel ? `${baseKindLabel} · ${item.tierLabel}` : baseKindLabel;
+    const actionHint = item.actionHint ? `<div class="evidence-action">${escapeHtml(item.actionHint)}</div>` : "";
+    return `
+      <div class="evidence-item live ${cls}">
+        <div class="evidence-title-row">
+          <span class="strength">${escapeHtml(item.strengthLabel || item.strength || "待核验")}</span>
+          <span class="evidence-kind">${escapeHtml(kindLabel)}</span>
+        </div>
+        <a class="evidence-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.titleZh || item.title)}</a>
+        <p>${escapeHtml(item.summaryZh || item.summary || "")}</p>
+        ${actionHint}
+        <div class="evidence-meta">${escapeHtml(item.sourceZh || item.source)} · ${escapeHtml(formatEvidenceDate(item.date))} · ${escapeHtml(item.freshnessZh || item.freshness || "")}</div>
+      </div>
+    `;
+  }).join("") : `
+    <div class="evidence-item needs-checking">
+      <span class="strength">待核验</span>
+      <p>实时证据源暂时没有返回可用条目；先按本地框架假设处理，并回到 SEC、IR、官方公告核验。</p>
+    </div>
+  `;
+  const localMarkup = p.evidence.map(([strength, text]) => {
+    const cls = evidenceClass(strength);
+    const label = STRENGTH_LABELS?.[strength] || strength;
+    return `<div class="evidence-item local ${cls}"><span class="strength">${escapeHtml(label)}</span><p>${escapeHtml(text)}</p></div>`;
+  }).join("");
+  el.evidenceList.innerHTML = `
+    <div class="evidence-feed-head">
+      <strong>实时证据</strong>
+      <span>${escapeHtml(fetched)}</span>
+      ${sourceStrip}
+    </div>
+    ${liveMarkup}
+    <div class="evidence-feed-head local-head">
+      <strong>本地 Serenity 笔记</strong>
       <span>启发式假设</span>
     </div>
     ${localMarkup}
@@ -2199,8 +2269,60 @@ function bindEvents() {
   });
 }
 
+function setupSmartMoneyLayer() {
+  const panel = document.querySelector(".smart-money-panel");
+  if (!panel || panel.dataset.layerReady) return;
+  const head = panel.querySelector(".smart-money-head");
+  const tabs = panel.querySelector(".portfolio-tabs");
+  const layout = panel.querySelector(".portfolio-layout");
+  if (!head || !layout) return;
+
+  panel.dataset.layerReady = "true";
+  panel.classList.add("secondary-smart-money", "is-collapsed");
+
+  const summary = document.createElement("div");
+  summary.className = "secondary-layer-summary";
+  summary.innerHTML = `
+    <div>
+      <span>二层机会池</span>
+      <strong>Smart Money 只做灵感来源</strong>
+      <p>大师、国会、AI 基建和 Serenity 模拟组合放到第二层，先看当前标的证据，再打开持仓榜找相关线索。</p>
+    </div>
+    <div class="secondary-layer-stats">
+      <span>${PORTFOLIOS.length} 个组合</span>
+      <span>${PORTFOLIOS.reduce((sum, item) => sum + item.holdings.length, 0)} 个持仓</span>
+      <span>250日对比</span>
+    </div>
+  `;
+  panel.insertBefore(summary, layout);
+
+  const toggle = document.createElement("button");
+  toggle.className = "secondary-toggle";
+  toggle.type = "button";
+  head.appendChild(toggle);
+
+  const sync = () => {
+    const collapsed = panel.classList.contains("is-collapsed");
+    toggle.textContent = collapsed ? "展开二层" : "收起二层";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    summary.hidden = !collapsed;
+    layout.hidden = collapsed;
+    if (tabs) tabs.hidden = collapsed;
+  };
+
+  toggle.addEventListener("click", () => {
+    panel.classList.toggle("is-collapsed");
+    sync();
+    if (!panel.classList.contains("is-collapsed")) {
+      renderPortfolioBoard();
+    }
+  });
+  sync();
+}
+
 function init() {
   bindEvents();
+  setupSmartMoneyLayer();
   tickClock();
   setInterval(tickClock, 30000);
   fetchFxRate();
