@@ -1,0 +1,271 @@
+--- a/server.py
++++ b/server.py
+@@ -7,6 +7,7 @@
+ import re
+ import time
+ import xml.etree.ElementTree as ET
++from concurrent.futures import ThreadPoolExecutor, as_completed
+ from datetime import date, datetime, time as datetime_time, timedelta, timezone
+ from email.utils import parsedate_to_datetime
+ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+@@ -22,9 +23,16 @@
+ MONITOR_CACHE_TTL_SECONDS = int(os.environ.get("SERENITY_MONITOR_TTL_SECONDS", "90"))
+ YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range}&interval={interval}&includePrePost=false&events=div%2Csplits"
+ YAHOO_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
++GOOGLE_NEWS_RSS = "https://news.google.com/rss/search?q={query}&hl={hl}&gl={gl}&ceid={ceid}"
++PRNEWSWIRE_RSS = "https://www.prnewswire.com/rss/news-releases-list.rss"
++GLOBENEWSWIRE_PUBLIC_RSS = "https://www.globenewswire.com/RssFeed/orgclass/1/feedTitle/GlobeNewswire%20-%20News%20about%20Public%20Companies"
+ SEC_TICKERS = "https://www.sec.gov/files/company_tickers.json"
+ SEC_SUBMISSIONS = "https://data.sec.gov/submissions/CIK{cik}.json"
+ X_API_BASE = "https://api.x.com/2"
++MYMEMORY_TRANSLATE = "https://api.mymemory.translated.net/get?q={text}&langpair=en%7Czh-CN"
++TRANSLATE_TO_ZH = os.environ.get("SERENITY_TRANSLATE_ZH", "1").strip().lower() not in {"0", "false", "no"}
++TRANSLATE_TIMEOUT_SECONDS = float(os.environ.get("SERENITY_TRANSLATE_TIMEOUT_SECONDS", "6"))
++TRANSLATE_MAX_WORKERS = int(os.environ.get("SERENITY_TRANSLATE_WORKERS", "6"))
+ 
+ DEFAULT_HEADERS = {
+     "accept": "text/html,application/xhtml+xml,application/xml,text/xml,application/json;q=0.9,*/*;q=0.8",
+@@ -122,6 +130,287 @@
+     "MU": "micron.com",
+     "LRCX": "lamresearch.com",
+ }
++COMPANY_NEWS_NAMES = {
++    "AAPL": "Apple",
++    "AMD": "AMD",
++    "AMZN": "Amazon",
++    "ASML": "ASML",
++    "AVGO": "Broadcom",
++    "CRWV": "CoreWeave",
++    "GOOG": "Google",
++    "GOOGL": "Google",
++    "INTC": "Intel",
++    "LRCX": "Lam Research",
++    "META": "Meta",
++    "MSFT": "Microsoft",
++    "MU": "Micron",
++    "NVDA": "NVIDIA",
++    "QCOM": "Qualcomm",
++    "SIVE.ST": "Sivers Semiconductors",
++    "TSLA": "Tesla",
++    "TSM": "TSMC",
++    "VRT": "Vertiv",
++}
++COMPANY_CHINESE_NAMES = {
++    "AAPL": "苹果",
++    "AMD": "AMD",
++    "AMZN": "亚马逊",
++    "ASML": "阿斯麦",
++    "AVGO": "博通",
++    "GOOGL": "谷歌",
++    "GOOG": "谷歌",
++    "INTC": "英特尔",
++    "META": "Meta",
++    "MSFT": "微软",
++    "MU": "美光",
++    "NVDA": "英伟达",
++    "QCOM": "高通",
++    "TSLA": "特斯拉",
++    "TSM": "台积电",
++}
++DIRECT_WIRE_RSS_FEEDS = [
++    {"name": "PR Newswire RSS", "url": PRNEWSWIRE_RSS},
++    {"name": "GlobeNewswire RSS", "url": GLOBENEWSWIRE_PUBLIC_RSS},
++]
++FAST_MARKET_NEWS_CONTEXT = "Reuters CNBC Bloomberg MarketWatch Benzinga TheFly Barron's Investor's Business Daily"
++OFFICIAL_WIRE_NEWS_CONTEXT = "site:businesswire.com OR site:globenewswire.com OR site:prnewswire.com"
++CHINA_MARKET_NEWS_CONTEXT = "财联社 华尔街见闻 证券时报 格隆汇 美港电讯 富途 雪球"
++AI_SUPPLY_CHAIN_SYMBOLS = {
++    "NVDA", "AMD", "AVGO", "TSM", "ASML", "MU", "LRCX", "INTC", "QCOM", "CRWV", "VRT", "ANET"
++}
++NEWS_QUERY_OVERRIDES = {
++    "NVDA": [
++        "NVIDIA Korea Samsung SK hynix HBM when:14d",
++        "NVIDIA SK hynix Naver Doosan South Korea AI data centers when:14d",
++        "NVIDIA Samsung HBM foundry Korea when:14d",
++        "NVDA OR NVIDIA stock when:14d",
++    ],
++    "AMD": [
++        "AMD AI GPU MI300 MI350 data center when:14d",
++        "AMD OR Advanced Micro Devices stock when:14d",
++    ],
++    "AVGO": [
++        "Broadcom AI custom silicon ASIC stock when:14d",
++        "AVGO OR Broadcom stock when:14d",
++    ],
++    "MU": [
++        "Micron HBM memory AI stock when:14d",
++        "MU OR Micron stock when:14d",
++    ],
++    "QCOM": [
++        "Qualcomm Snapdragon AI chip stock when:14d",
++        "QCOM OR Qualcomm stock when:14d",
++    ],
++    "TSM": [
++        "TSMC CoWoS AI chip capacity stock when:14d",
++        "TSM OR TSMC stock when:14d",
++    ],
++}
++SUPPLY_CHAIN_NEWS_TERMS = (
++    "ai factory",
++    "co-packaged",
++    "cowos",
++    "data center",
++    "foundry",
++    "hbm",
++    "korea",
++    "memory",
++    "samsung",
++    "sk hynix",
++    "supplier",
++    "supply",
++    "taiwan",
++    "tsmc",
++)
++TRUSTED_NEWS_SOURCES = (
++    "reuters",
++    "bloomberg",
++    "cnbc",
++    "marketwatch",
++    "barron's",
++    "investor's business daily",
++    "business wire",
++    "pr newswire",
++    "globenewswire",
++    "nasdaq",
++)
++SPECIALIST_NEWS_SOURCES = (
++    "digitimes",
++    "thelec",
++    "the korea herald",
++    "the korea times",
++    "trendforce",
++    "nikkei asia",
++    "ked global",
++    "siliconangle",
++    "blocks & files",
++    "techzine",
++    "seeking alpha",
++    "marketscreener",
++    "tradingview",
++)
++NOISY_NEWS_SOURCES = (
++    "stocktwits",
++    "24/7 wall st",
++    "barchart",
++    "mshale",
++    "gotrade",
++    "let's data science",
++    "the american bazaar",
++    "mezha",
++    "104.1 wiky",
++    "marketwise",
++    "tradingkey",
++    "quiver quantitative",
++)
++LOW_VALUE_NEWS_PATTERNS = (
++    r"\bwill trade at this price\b",
++    r"\bprice prediction\b",
++    r"\bshould you buy\b",
++    r"\bshould investors buy\b",
++    r"\bbest stocks?\b",
++    r"\b3 stocks?\b",
++    r"\bthree stocks?\b",
++    r"\btop stocks?\b",
++    r"\b10-baggers?\b",
++    r"\bget exposure to\b",
++    r"\bwithout actually buying\b",
++    r"\bbiggest analyst calls\b",
++    r"\bstocks? making (?:the )?biggest moves\b",
++    r"\bbiggest moves\b",
++    r"\bpremarket\b",
++    r"\bstock fans\b",
++    r"\bmark your calendars\b",
++    r"\bgenerational entry point\b",
++    r"\bvalue trap\b",
++    r"\bexplains? the market today\b",
++    r"\bkeeping traders engaged\b",
++    r"\bstock bob\b",
++    r"\bstock underperforms\b",
++    r"\bstock outperforms competitors\b",
++    r"\bstock .*performs competitors\b",
++    r"\bwhich .* stock wins\b",
++    r"\bwhich .* wins now\b",
++    r"\byoutube\b",
++    r"\bfake .*endorsement video\b",
++    r"\betfs? announces? distributions?\b",
++    r"\byieldmax\b",
++    r"\bweekly distributions?\b",
++    r"\bdividend reports?\b",
++)
++MATERIAL_NEWS_PATTERNS = (
++    r"\border\b",
++    r"\bcontract\b",
++    r"\bdeal\b",
++    r"\bpartnership\b",
++    r"\bcollaboration\b",
++    r"\bcustomer\b",
++    r"\bproduction\b",
++    r"\bsupply\b",
++    r"\bsupplier\b",
++    r"\bshipment\b",
++    r"\bdata centers?\b",
++    r"\bai infrastructure\b",
++    r"\bhbm\b",
++    r"\bfoundry\b",
++    r"\bmemory\b",
++    r"\bearnings?\b",
++    r"\brevenue\b",
++    r"\bguidance\b",
++    r"\bbacklog\b",
++    r"\bsecures?\b",
++    r"\blaunch(?:es|ed)?\b",
++    r"\bunveils?\b",
++    r"\bexport controls?\b",
++    r"\bclass action\b",
++    r"\binvestigation\b",
++    r"\binsider\b",
++    r"\bsells? shares?\b",
++)
++ECOSYSTEM_ONLY_PATTERNS = (
++    r"\bpowered by nvidia\b",
++    r"\bnvidia mgx\b",
++    r"\bnvidia omniverse\b",
++    r"\bnvidia isaac\b",
++    r"\bnvidia nvlink fusion\b",
++    r"\bnvidia dsx\b",
++    r"\bnvidia[- ]powered\b",
++    r"\bnvidia ecosystem\b",
++    r"\bnvidia reference\b",
++)
++STRENGTH_LABEL_ZH = {
++    "Strong": "强证据",
++    "Medium": "中等线索",
++    "Weak": "弱线索",
++    "Needs checking": "待核验",
++}
++SOURCE_STATUS_ZH = {
++    "ok": "已连接",
++    "unavailable": "不可用",
++    "not_found": "未找到",
++    "not_applicable": "不适用",
++    "not_configured": "手动源",
++    "needs_token": "等待 Token",
++}
++SOURCE_NAME_ZH = {
++    "Official/IR curated": "官方/IR 精选",
++    "SEC EDGAR": "SEC 监管文件",
++    "Press release RSS": "新闻稿 RSS",
++    "Official wires via Google": "新闻稿聚合",
++    "Sector specialist news": "行业/供应链新闻",
++    "Fast market media": "快讯媒体",
++    "China market lens": "中文视角",
++    "Yahoo Finance RSS": "雅虎财经 RSS",
++}
++OUTLET_NAME_ZH = {
++    "Reuters": "路透",
++    "Bloomberg": "彭博",
++    "CNBC": "CNBC",
++    "Barron's": "巴伦周刊",
++    "Investor's Business Daily": "投资者商业日报",
++    "Business Wire": "Business Wire",
++    "PR Newswire": "美通社",
