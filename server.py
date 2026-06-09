@@ -41,6 +41,13 @@ MONITOR_SYMBOL_ALIASES = {
     "BRK.A": "BRK-A",
     "BRK.B": "BRK-B",
 }
+SYMBOL_ALIASES = {
+    "QUALCOMM": "QCOM",
+    "高通": "QCOM",
+    "高通公司": "QCOM",
+    "骁龙": "QCOM",
+    "驍龍": "QCOM",
+}
 MONITOR_TICKER_BLACKLIST = {"USD", "US", "NYSE", "NASDAQ"}
 OFFICIAL_SOURCES = {
     "SIVE.ST": [
@@ -164,6 +171,12 @@ def company_badge_svg(symbol):
 def normalize_symbol(value):
     symbol = "".join(ch for ch in value.upper().strip() if ch.isalnum() or ch in ".-=")
     return symbol[:16]
+
+
+def resolve_symbol(value):
+    text = (value or "").strip()
+    upper = text.upper()
+    return SYMBOL_ALIASES.get(text) or SYMBOL_ALIASES.get(upper) or normalize_symbol(text)
 
 
 def now_iso():
@@ -937,7 +950,7 @@ def evidence_payload(symbol):
 
 
 def serve_company_logo(handler, symbol):
-    symbol = normalize_symbol(symbol)
+    symbol = resolve_symbol(symbol)
     domain = COMPANY_DOMAINS.get(symbol)
     if not domain:
         json_response(handler, {"error": "Logo domain not configured"}, status=404)
@@ -999,7 +1012,7 @@ class Handler(SimpleHTTPRequestHandler):
                 json_response(self, monitor_payload(handle, bearer_from_request(self), force=force))
                 return
             if parsed.path.startswith("/api/chart/"):
-                symbol = normalize_symbol(unquote(parsed.path.rsplit("/", 1)[-1]))
+                symbol = resolve_symbol(unquote(parsed.path.rsplit("/", 1)[-1]))
                 range_value = (query.get("range") or ["6mo"])[0]
                 if not symbol:
                     json_response(self, {"error": "Missing symbol"}, status=400)
@@ -1007,7 +1020,7 @@ class Handler(SimpleHTTPRequestHandler):
                 json_response(self, shape_chart_payload(symbol, range_value))
                 return
             if parsed.path.startswith("/api/evidence/"):
-                symbol = normalize_symbol(unquote(parsed.path.rsplit("/", 1)[-1]))
+                symbol = resolve_symbol(unquote(parsed.path.rsplit("/", 1)[-1]))
                 if not symbol:
                     json_response(self, {"error": "Missing symbol"}, status=400)
                     return
