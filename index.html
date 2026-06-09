@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Serenity Ultimate US Stock Terminal</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark" aria-hidden="true">S</div>
+        <div>
+          <h1>Serenity Ultimate 美股终端</h1>
+          <p>供应链瓶颈 · GF-DMA · Bayesian 增长 · TAM-PEG · Alpha 验证</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="marketClock" class="market-clock">--</span>
+        <button id="refreshButton" class="icon-button" type="button" aria-label="刷新研究终端" title="刷新研究终端">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.9 4M4 12A8 8 0 0 1 18.9 8M19 4v4h-4M5 20v-4h4"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="left-rail">
+        <section class="panel control-panel">
+          <label class="search-box">
+            <span>研究标的</span>
+            <div>
+              <input id="symbolInput" autocomplete="off" placeholder="NVDA / 英伟达 / SIVE" />
+              <button id="addSymbolButton" type="button">打开</button>
+            </div>
+          </label>
+          <div class="segmented filter-tabs" aria-label="候选池过滤">
+            <button class="active" data-filter="all" type="button">全部</button>
+            <button data-filter="scarce" type="button">卡点</button>
+            <button data-filter="power" type="button">电力</button>
+            <button data-filter="risk" type="button">高波动</button>
+          </div>
+        </section>
+
+        <section class="panel china-session-panel">
+          <div class="section-head">
+            <div>
+              <h2>中国看盘窗口</h2>
+              <p>北京时间 · 美股常规盘 · 人民币估算</p>
+            </div>
+          </div>
+          <div id="chinaSessionPanel" class="china-session-body"></div>
+        </section>
+
+        <section class="panel layer-panel">
+          <div class="section-head">
+            <div>
+              <h2>产业链层级排序</h2>
+              <p>先排卡点，再排股票</p>
+            </div>
+          </div>
+          <div id="layerRanking" class="layer-ranking"></div>
+        </section>
+
+        <section class="panel universe-panel">
+          <div class="section-head">
+            <div>
+              <h2>候选宇宙</h2>
+              <p id="universeMeta">载入中</p>
+            </div>
+          </div>
+          <div id="universeRows" class="universe-rows" aria-live="polite"></div>
+        </section>
+      </aside>
+
+      <section class="center-stack">
+        <section class="panel hero-panel">
+          <div class="quote-head">
+            <div>
+              <div class="ticker-line">
+                <h2 id="activeTicker">NVDA</h2>
+                <span id="activeName">NVIDIA</span>
+                <span id="activeTheme" class="theme-pill">AI 算力核心</span>
+              </div>
+              <p id="activeMeta">数据来自 Yahoo Finance；研究分为启发式，不是买卖建议</p>
+            </div>
+            <div class="price-stack">
+              <strong id="activePrice">--</strong>
+              <span id="activeChange" class="flat">--</span>
+              <em id="activeCny" class="cny-estimate">--</em>
+            </div>
+          </div>
+
+          <div class="summary-grid">
+            <div class="summary-score">
+              <span>综合研究优先级</span>
+              <strong id="compositeScore">--</strong>
+              <em id="compositeVerdict">--</em>
+            </div>
+            <div id="metricStrip" class="metric-strip"></div>
+          </div>
+
+          <div id="chinaActionStrip" class="china-action-strip"></div>
+
+          <div class="chart-toolbar">
+            <div class="segmented range-tabs" aria-label="价格区间">
+              <button data-range="3mo" type="button">3月</button>
+              <button class="active" data-range="6mo" type="button">6月</button>
+              <button data-range="1y" type="button">1年</button>
+              <button data-range="2y" type="button">2年</button>
+            </div>
+            <div class="legend">
+              <span><i class="line-price"></i>价格</span>
+              <span><i class="line-sma"></i>20DMA</span>
+              <span><i class="bar-volume"></i>成交量</span>
+            </div>
+          </div>
+
+          <div class="chart-wrap">
+            <canvas id="priceCanvas" width="1200" height="520" aria-label="价格走势图"></canvas>
+            <div id="chartTooltip" class="chart-tooltip" hidden></div>
+            <div id="chartState" class="chart-state">正在载入价格数据</div>
+          </div>
+        </section>
+
+        <section class="panel signal-monitor-panel">
+          <div class="section-head monitor-head">
+            <div>
+              <h2>X 喊单监控</h2>
+              <p id="monitorMeta">@aleabitoreddit · 开盘窗口才列入可买 · 90 秒轮询</p>
+            </div>
+            <div class="monitor-actions">
+              <span id="monitorStatusPill" class="monitor-status-pill">未连接</span>
+              <button id="monitorRefreshButton" class="icon-button" type="button" aria-label="刷新喊单监控" title="刷新喊单监控">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
+              </button>
+            </div>
+          </div>
+          <div id="monitorTokenSetup" class="monitor-setup" hidden>
+            <div>
+              <strong>需要 X Bearer Token</strong>
+              <span>用于读取公开时间线；只保存在本机浏览器，不写入代码。</span>
+            </div>
+            <div class="monitor-token-row">
+              <input id="monitorTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴 X API Bearer Token" />
+              <button id="monitorTokenSave" type="button">保存并刷新</button>
+            </div>
+          </div>
+          <div id="monitorSummary" class="monitor-summary"></div>
+          <div id="monitorBuyList" class="monitor-buy-list" aria-live="polite"></div>
+          <div id="monitorPosts" class="monitor-posts"></div>
+        </section>
+
+        <section class="panel smart-money-panel">
+          <div class="section-head smart-money-head">
+            <div>
+              <h2>Smart Money 持仓榜</h2>
+              <p id="portfolioMeta">250 日组合收益 · Top holdings · 与 SPY 对比</p>
+            </div>
+            <div class="segmented portfolio-tabs" aria-label="持仓榜过滤">
+              <button class="active" data-portfolio-filter="all" type="button">全部</button>
+              <button data-portfolio-filter="guru" type="button">大师</button>
+              <button data-portfolio-filter="congress" type="button">国会</button>
+              <button data-portfolio-filter="ai" type="button">AI</button>
+            </div>
+          </div>
+          <div class="portfolio-layout">
+            <div id="portfolioSpotlight" class="portfolio-spotlight"></div>
+            <div id="portfolioBoard" class="portfolio-board" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="engine-grid">
+          <article class="panel engine-card">
+            <div class="engine-head"><h3>供应链瓶颈</h3><strong id="bottleneckScore">--</strong></div>
+            <div id="bottleneckBars" class="score-bars"></div>
+          </article>
+          <article class="panel engine-card">
+            <div class="engine-head"><h3>GF-DMA 健康</h3><strong id="gfDmaScore">--</strong></div>
+            <div id="gfDmaBars" class="score-bars"></div>
+          </article>
+          <article class="panel engine-card">
+            <div class="engine-head"><h3>Serenity Alpha</h3><strong id="alphaScore">--</strong></div>
+            <div id="alphaBars" class="score-bars"></div>
+          </article>
+          <article class="panel engine-card">
+            <div class="engine-head"><h3>Bayesian 增长</h3><strong id="bayesianScore">--</strong></div>
+            <div id="bayesianBars" class="score-bars"></div>
+          </article>
+          <article class="panel engine-card">
+            <div class="engine-head"><h3>TAM-Adj-PEG</h3><strong id="tamPegScore">--</strong></div>
+            <div id="tamPegDetails" class="detail-list"></div>
+          </article>
+          <article class="panel engine-card">
+            <div class="engine-head"><h3>语料/主题信号</h3><strong id="corpusScore">--</strong></div>
+            <div id="corpusDetails" class="detail-list"></div>
+          </article>
+        </section>
+
+        <section class="panel framework-panel">
+          <div class="section-head">
+            <div>
+              <h2>完整框架 Ledger</h2>
+              <p>从叙事拆到财报、估值、趋势和证据</p>
+            </div>
+          </div>
+          <div id="frameworkLedger" class="framework-ledger"></div>
+        </section>
+      </section>
+
+      <aside class="right-rail">
+        <section class="panel memo-panel">
+          <div class="section-head">
+            <div>
+              <h2>研究 Memo</h2>
+              <p id="memoHorizon">3-12 个月验证窗口</p>
+            </div>
+          </div>
+          <div id="researchMemo" class="research-memo"></div>
+        </section>
+
+        <section class="panel evidence-panel">
+          <div class="section-head">
+            <div>
+              <h2>证据阶梯</h2>
+              <p>Strong / Medium / Weak / Needs checking</p>
+            </div>
+          </div>
+          <div id="evidenceList" class="evidence-list"></div>
+        </section>
+
+        <section class="panel risk-panel">
+          <div class="section-head">
+            <div>
+              <h2>降级条件</h2>
+              <p>什么情况说明判断错了</p>
+            </div>
+          </div>
+          <div id="killSwitches" class="kill-switches"></div>
+        </section>
+
+        <section class="panel boundary-panel">
+          <h2>边界</h2>
+          <p>我会按研究优先级排序，买卖动作由你自己决定。当前页面的估值和证据模块包含启发式假设，强结论要回到 SEC 文件、财报电话会、IR 材料和客户/供应商公开证据。</p>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
