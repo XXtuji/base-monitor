@@ -79,6 +79,7 @@ COMPANY_DOMAINS = {
     "BAC": "bankofamerica.com",
     "GOOGL": "google.com",
     "GOOG": "google.com",
+    "QCOM": "qualcomm.com",
     "CVX": "chevron.com",
     "OXY": "oxy.com",
     "CB": "chubb.com",
