@@ -46,6 +46,11 @@ const SYMBOL_ALIASES = {
   甲骨文: "ORCL",
   甲骨文公司: "ORCL",
   思科: "CSCO",
+  高通: "QCOM",
+  高通公司: "QCOM",
+  骁龙: "QCOM",
+  驍龍: "QCOM",
+  QUALCOMM: "QCOM",
   迈威尔: "MRVL",
   邁威爾: "MRVL"
 };
@@ -403,6 +408,7 @@ const COMPANY_DOMAINS = {
   BAC: "bankofamerica.com",
   GOOGL: "google.com",
   GOOG: "google.com",
+  QCOM: "qualcomm.com",
   CVX: "chevron.com",
   OXY: "oxy.com",
   CB: "chubb.com",
