@@ -3,7 +3,7 @@ name: Apply Codex Sync Patch
 on:
   push:
     paths:
-      - ".codex-sync/sync.patch"
+      - ".codex-sync/**"
       - ".github/workflows/apply-codex-sync.yml"
   workflow_dispatch:
 
@@ -18,8 +18,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply Codex patch
+      - name: Assemble and apply Codex patch
         run: |
+          if [ -d .codex-sync/parts ]; then
+            cat .codex-sync/parts/*.patch > .codex-sync/sync.patch
+          fi
           git apply --whitespace=nowarn .codex-sync/sync.patch
       - name: Commit synced files
         run: |
