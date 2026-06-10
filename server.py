@@ -21,6 +21,10 @@ CACHE_TTL_SECONDS = 90
 EVIDENCE_CACHE_TTL_SECONDS = 600
 LONG_CACHE_TTL_SECONDS = 86400
 MONITOR_CACHE_TTL_SECONDS = int(os.environ.get("SERENITY_MONITOR_TTL_SECONDS", "90"))
+REDDIT_TRENDING_TTL_SECONDS = int(os.environ.get("SERENITY_REDDIT_TTL_SECONDS", "300"))
+FRED_CACHE_TTL_SECONDS = int(os.environ.get("SERENITY_FRED_TTL_SECONDS", "3600"))
+POLITICAL_TRADES_TTL_SECONDS = int(os.environ.get("SERENITY_POLITICAL_TRADES_TTL_SECONDS", "21600"))
+CONGRESS_TRADES_TTL_SECONDS = int(os.environ.get("SERENITY_CONGRESS_TRADES_TTL_SECONDS", "900"))
 YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range}&interval={interval}&includePrePost=false&events=div%2Csplits"
 YAHOO_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
 GOOGLE_NEWS_RSS = "https://news.google.com/rss/search?q={query}&hl={hl}&gl={gl}&ceid={ceid}"
@@ -29,6 +33,13 @@ GLOBENEWSWIRE_PUBLIC_RSS = "https://www.globenewswire.com/RssFeed/orgclass/1/fee
 SEC_TICKERS = "https://www.sec.gov/files/company_tickers.json"
 SEC_SUBMISSIONS = "https://data.sec.gov/submissions/CIK{cik}.json"
 X_API_BASE = "https://api.x.com/2"
+MEIGUHULI_CACHE = "https://cache.meiguhuli.com"
+OPEN_CABINET_DATASET = "https://open-cabinet.org/data/full-dataset.json"
+OPEN_CABINET_SITE = "https://open-cabinet.org"
+QUIVER_CONGRESS_TRADING = "https://api.quiverquant.com/beta/live/congresstrading"
+CONGRESSSTOCK_TRADES = "https://www.congressstock.com/trades"
+CONGRESSSTOCK_STOCK = "https://www.congressstock.com/stocks/{symbol}"
+FRED_OBSERVATIONS = "https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={api_key}&file_type=json&sort_order=desc&limit={limit}"
 MYMEMORY_TRANSLATE = "https://api.mymemory.translated.net/get?q={text}&langpair=en%7Czh-CN"
 TRANSLATE_TO_ZH = os.environ.get("SERENITY_TRANSLATE_ZH", "1").strip().lower() not in {"0", "false", "no"}
 TRANSLATE_TIMEOUT_SECONDS = float(os.environ.get("SERENITY_TRANSLATE_TIMEOUT_SECONDS", "6"))
@@ -88,6 +99,8 @@ OFFICIAL_SOURCES = {
     ],
 }
 COMPANY_DOMAINS = {
+    "SPY": "ssga.com",
+    "QQQ": "invesco.com",
     "AAPL": "apple.com",
     "AXP": "americanexpress.com",
     "KO": "coca-colacompany.com",
@@ -106,6 +119,24 @@ COMPANY_DOMAINS = {
     "MSFT": "microsoft.com",
     "PANW": "paloaltonetworks.com",
     "CRWV": "coreweave.com",
+    "MRVL": "marvell.com",
+    "ASTS": "ast-science.com",
+    "DJT": "trumpmediagroup.com",
+    "BA": "boeing.com",
+    "AXON": "axon.com",
+    "BE": "bloomenergy.com",
+    "IREN": "iren.com",
+    "CORZ": "corescientific.com",
+    "APLD": "applieddigital.com",
+    "RIOT": "riotplatforms.com",
+    "CLSK": "cleanspark.com",
+    "SEI": "solaris-energy.com",
+    "BITF": "bitfarms.com",
+    "BTDR": "bitdeer.com",
+    "RDDT": "redditinc.com",
+    "NOW": "servicenow.com",
+    "SOXL": "direxion.com",
+    "SOXS": "direxion.com",
     "AVGO": "broadcom.com",
     "TSM": "tsmc.com",
     "ANET": "arista.com",
@@ -116,6 +147,8 @@ COMPANY_DOMAINS = {
     "SHOP": "shopify.com",
     "CRSP": "crisprtx.com",
     "BRK-A": "berkshirehathaway.com",
+    "BRK-B": "berkshirehathaway.com",
+    "BN": "brookfield.com",
     "META": "meta.com",
     "BABA": "alibabagroup.com",
     "PACK": "ranpak.com",
@@ -129,6 +162,40 @@ COMPANY_DOMAINS = {
     "ASML": "asml.com",
     "MU": "micron.com",
     "LRCX": "lamresearch.com",
+    "UBER": "uber.com",
+    "QSR": "rbi.com",
+    "CMG": "chipotle.com",
+    "HLT": "hilton.com",
+    "PDD": "pddholdings.com",
+    "WM": "wm.com",
+    "CNI": "cn.ca",
+    "DE": "deere.com",
+    "ECL": "ecolab.com",
+    "WMT": "walmart.com",
+    "EWBC": "eastwestbank.com",
+    "CROX": "crocs.com",
+    "NTRA": "natera.com",
+    "INSM": "insmed.com",
+    "EWZ": "ishares.com",
+    "RSP": "invesco.com",
+    "YPF": "ypf.com",
+    "AA": "alcoa.com",
+    "MOH": "molinahealthcare.com",
+    "LULU": "lululemon.com",
+    "SLM": "salliemae.com",
+    "BRKR": "bruker.com",
+    "GEV": "gevernova.com",
+    "CPNG": "coupang.com",
+    "CPAY": "corpay.com",
+    "APP": "applovin.com",
+    "PSX": "phillips66.com",
+    "LUV": "southwest.com",
+    "HPE": "hpe.com",
+    "QRVO": "qorvo.com",
+    "KVUE": "kenvue.com",
+    "MTCH": "mtch.com",
+    "IEP": "ielp.com",
+    "CVI": "cvrenergy.com",
 }
 COMPANY_NEWS_NAMES = {
     "AAPL": "Apple",
@@ -150,6 +217,41 @@ COMPANY_NEWS_NAMES = {
     "TSLA": "Tesla",
     "TSM": "TSMC",
     "VRT": "Vertiv",
+    "BN": "Brookfield",
+    "UBER": "Uber",
+    "QSR": "Restaurant Brands",
+    "CMG": "Chipotle",
+    "HLT": "Hilton",
+    "PDD": "PDD Holdings",
+    "WM": "Waste Management",
+    "CNI": "Canadian National Railway",
+    "DE": "Deere",
+    "ECL": "Ecolab",
+    "WMT": "Walmart",
+    "EWBC": "East West Bancorp",
+    "CROX": "Crocs",
+    "NTRA": "Natera",
+    "INSM": "Insmed",
+    "EWZ": "iShares MSCI Brazil ETF",
+    "RSP": "Invesco S&P 500 Equal Weight ETF",
+    "YPF": "YPF",
+    "AA": "Alcoa",
+    "MOH": "Molina Healthcare",
+    "LULU": "Lululemon",
+    "SLM": "Sallie Mae",
+    "BRKR": "Bruker",
+    "GEV": "GE Vernova",
+    "CPNG": "Coupang",
+    "CPAY": "Corpay",
+    "APP": "AppLovin",
+    "PSX": "Phillips 66",
+    "LUV": "Southwest Airlines",
+    "HPE": "HPE",
+    "QRVO": "Qorvo",
+    "KVUE": "Kenvue",
+    "MTCH": "Match Group",
+    "IEP": "Icahn Enterprises",
+    "CVI": "CVR Energy",
 }
 COMPANY_CHINESE_NAMES = {
     "AAPL": "苹果",
@@ -167,10 +269,54 @@ COMPANY_CHINESE_NAMES = {
     "QCOM": "高通",
     "TSLA": "特斯拉",
     "TSM": "台积电",
+    "BN": "布鲁克菲尔德",
+    "UBER": "优步",
+    "QSR": "餐饮品牌国际",
+    "CMG": "Chipotle",
+    "HLT": "希尔顿",
+    "PDD": "拼多多",
+    "WM": "废品管理",
+    "CNI": "加拿大国家铁路",
+    "DE": "迪尔",
+    "ECL": "艺康",
+    "WMT": "沃尔玛",
+    "EWBC": "华美银行",
+    "CROX": "卡骆驰",
+    "NTRA": "Natera",
+    "INSM": "Insmed",
+    "EWZ": "巴西 ETF",
+    "RSP": "标普等权 ETF",
+    "YPF": "阿根廷国家石油",
+    "AA": "美国铝业",
+    "MOH": "Molina Healthcare",
+    "LULU": "露露乐蒙",
+    "SLM": "Sallie Mae",
+    "BRKR": "布鲁克",
+    "GEV": "GE Vernova",
+    "CPNG": "Coupang",
+    "CPAY": "Corpay",
+    "APP": "AppLovin",
+    "PSX": "菲利普斯66",
+    "LUV": "西南航空",
+    "HPE": "惠普企业",
+    "QRVO": "Qorvo",
+    "KVUE": "Kenvue",
+    "MTCH": "Match Group",
+    "IEP": "Icahn Enterprises",
+    "CVI": "CVR Energy",
 }
 DIRECT_WIRE_RSS_FEEDS = [
     {"name": "PR Newswire RSS", "url": PRNEWSWIRE_RSS},
     {"name": "GlobeNewswire RSS", "url": GLOBENEWSWIRE_PUBLIC_RSS},
+]
+FRED_MACRO_SERIES = [
+    {"id": "DGS10", "label": "10年美债", "unit": "%", "precision": 2, "note": "长端利率，压估值"},
+    {"id": "DGS2", "label": "2年美债", "unit": "%", "precision": 2, "note": "短端政策预期"},
+    {"id": "T10Y2Y", "label": "10Y-2Y", "unit": "pct", "precision": 2, "note": "收益率曲线"},
+    {"id": "FEDFUNDS", "label": "联邦基金利率", "unit": "%", "precision": 2, "note": "政策利率"},
+    {"id": "CPIAUCSL", "label": "CPI 指数", "unit": "", "precision": 1, "note": "通胀压力"},
+    {"id": "UNRATE", "label": "失业率", "unit": "%", "precision": 1, "note": "就业周期"},
+    {"id": "BAMLH0A0HYM2", "label": "高收益利差", "unit": "%", "precision": 2, "note": "信用风险偏好"},
 ]
 FAST_MARKET_NEWS_CONTEXT = "Reuters CNBC Bloomberg MarketWatch Benzinga TheFly Barron's Investor's Business Daily"
 OFFICIAL_WIRE_NEWS_CONTEXT = "site:businesswire.com OR site:globenewswire.com OR site:prnewswire.com"
@@ -262,6 +408,7 @@ NOISY_NEWS_SOURCES = (
     "marketwise",
     "tradingkey",
     "quiver quantitative",
+    "eciks.org",
 )
 LOW_VALUE_NEWS_PATTERNS = (
     r"\bwill trade at this price\b",
@@ -297,6 +444,36 @@ LOW_VALUE_NEWS_PATTERNS = (
     r"\byieldmax\b",
     r"\bweekly distributions?\b",
     r"\bdividend reports?\b",
+    r"\blaw firm\b",
+    r"\bshareholder alert\b",
+    r"\bclass action\b",
+    r"\bsecurities class action\b",
+    r"\binvestors? to inquire\b",
+    r"\bencourages? .* investors?\b",
+    r"\binsider\b",
+    r"\bsells? shares?\b",
+    r"\bsold shares?\b",
+    r"\banalyst target\b",
+    r"\bsparks rally\b",
+    r"\bunder scrutiny\b",
+    r"\bdoubling potential\b",
+    r"\bheading to nasdaq\b",
+)
+HARD_LOW_VALUE_NEWS_PATTERNS = (
+    r"\blaw firm\b",
+    r"\bshareholder alert\b",
+    r"\bclass action\b",
+    r"\bsecurities class action\b",
+    r"\binvestors? to inquire\b",
+    r"\bencourages? .* investors?\b",
+    r"\binsider\b",
+    r"\bsells? shares?\b",
+    r"\bsold shares?\b",
+    r"\banalyst target\b",
+    r"\bsparks rally\b",
+    r"\bunder scrutiny\b",
+    r"\bdoubling potential\b",
+    r"\bheading to nasdaq\b",
 )
 MATERIAL_NEWS_PATTERNS = (
     r"\border\b",
@@ -322,10 +499,6 @@ MATERIAL_NEWS_PATTERNS = (
     r"\blaunch(?:es|ed)?\b",
     r"\bunveils?\b",
     r"\bexport controls?\b",
-    r"\bclass action\b",
-    r"\binvestigation\b",
-    r"\binsider\b",
-    r"\bsells? shares?\b",
 )
 ECOSYSTEM_ONLY_PATTERNS = (
     r"\bpowered by nvidia\b",
@@ -400,6 +573,11 @@ TRANSLATION_REPLACEMENTS = (
     ("data centres", "数据中心"),
     ("data centers", "数据中心"),
     ("AI infrastructure", "AI 基础设施"),
+    ("Production", "量产"),
+    ("production", "量产"),
+    ("Ka-Band Beamforming ICs", "Ka 波段波束成形 IC"),
+    ("Next Generation Tactical Terminals", "下一代战术终端"),
+    ("Foundry Collaboration", "晶圆代工合作"),
     ("partnership", "合作"),
     ("Partnership", "合作"),
     ("collaboration", "合作"),
@@ -413,6 +591,7 @@ TRANSLATION_REPLACEMENTS = (
 )
 COMPANY_BADGE_LABELS = {
     "BRK-A": "BH",
+    "BRK-B": "BH",
 }
 PERSON_IMAGES = {
     "buffett": "https://commons.wikimedia.org/wiki/Special:FilePath/Warren_Buffett_at_the_2015_SelectUSA_Investment_Summit_%28cropped%29.jpg?width=360",
@@ -422,6 +601,54 @@ PERSON_IMAGES = {
     "duan": "https://img.i-scmp.com/cdn-cgi/image/fit%3Dcontain%2Cwidth%3D512%2Cformat%3Dauto/sites/default/files/d8/images/canvas/2026/04/17/ee19073f-7e4d-4908-a0b6-3e8c8f82f343_cb0c5d2e.jpg",
     "soros": "https://opensocietyfoundations.imgix.net/uploads/6264e8c8-a29e-4794-b9a8-c063cf16a1e9/2013-george-soros-desk-3000.jpg?auto=format&fit=crop&crop=faces&w=360&h=360&q=75",
     "greene": "https://www.congress.gov/img/member/g000596_200.jpg",
+    "trump": "https://commons.wikimedia.org/wiki/Special:FilePath/Donald_Trump_official_portrait_%282025%29.jpg?width=360",
+    "ackman": "https://commons.wikimedia.org/wiki/Special:FilePath/Bill_Ackman_%2827929603310%29.jpg?width=360",
+    "tepper": "https://www.tepperfoundation.org/uploads/david-p20-1.jpeg?_cchid=8c161b19281e800895535b1cf2a26328",
+    "gates": "https://commons.wikimedia.org/wiki/Special:FilePath/Bill_Gates_2018.jpg?width=360",
+    "lilu": "https://cdn.prod.website-files.com/5ef3c7300432b4eb48659917/68fa5947d6184e3b91deb2a7_Li_Lu0062_edit1_RELEASE2v2.jpg",
+    "duquesne": "wiki",
+    "burry": "wiki",
+    "leopold": "badge",
+    "coatue": "badge",
+    "tiger": "badge",
+    "activist-radar": "badge",
+}
+PERSON_WIKI_PAGES = {
+    "buffett": "Warren_Buffett",
+    "pelosi": "Nancy_Pelosi",
+    "jensen": "Jensen_Huang",
+    "cathie": "Cathie_Wood",
+    "soros": "George_Soros",
+    "greene": "Marjorie_Taylor_Greene",
+    "trump": "Donald_Trump",
+    "ackman": "Bill_Ackman",
+    "tepper": "David_Tepper",
+    "gates": "Bill_Gates",
+    "lilu": "Li_Lu",
+    "duquesne": "Stanley_Druckenmiller",
+    "burry": "Michael_Burry",
+    "coatue": "Philippe_Laffont",
+    "tiger": "Chase_Coleman_III",
+}
+PERSON_BADGE_LABELS = {
+    "buffett": "WB",
+    "pelosi": "NP",
+    "jensen": "JH",
+    "cathie": "CW",
+    "duan": "DY",
+    "soros": "GS",
+    "greene": "MG",
+    "trump": "DT",
+    "ackman": "BA",
+    "tepper": "DT",
+    "gates": "BG",
+    "lilu": "LL",
+    "duquesne": "SD",
+    "burry": "MB",
+    "leopold": "LA",
+    "coatue": "CL",
+    "tiger": "TG",
+    "activist-radar": "13D",
 }
 
 cache = {}
@@ -457,8 +684,45 @@ def company_badge_svg(symbol):
     return svg.encode("utf-8")
 
 
+def person_badge_svg(person_id):
+    label = PERSON_BADGE_LABELS.get(person_id, (person_id[:2] or "?").upper())
+    safe_label = html.escape(label.upper())
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="{safe_label} avatar">
+<defs>
+  <linearGradient id="g" x1="18" y1="12" x2="110" y2="116" gradientUnits="userSpaceOnUse">
+    <stop stop-color="#fde68a"/>
+    <stop offset=".55" stop-color="#34d399"/>
+    <stop offset="1" stop-color="#2563eb"/>
+  </linearGradient>
+</defs>
+<rect width="128" height="128" rx="64" fill="url(#g)"/>
+<circle cx="64" cy="49" r="25" fill="#fff7ed" fill-opacity=".92"/>
+<path d="M26 112c8-24 24-36 38-36s30 12 38 36" fill="#fff7ed" fill-opacity=".92"/>
+<text x="64" y="76" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="900" fill="#064e3b">{safe_label}</text>
+</svg>"""
+    return svg.encode("utf-8")
+
+
+def wiki_person_thumbnail_url(person_id):
+    page = PERSON_WIKI_PAGES.get(person_id)
+    if not page:
+        return ""
+    try:
+        data = http_json(
+            f"https://en.wikipedia.org/api/rest_v1/page/summary/{quote(page, safe='')}",
+            headers={
+                "accept": "application/json",
+                "user-agent": "Mozilla/5.0 Serenity-US-Stock-Desk/1.0",
+            },
+            ttl_seconds=LONG_CACHE_TTL_SECONDS,
+        )
+        return ((data.get("thumbnail") or {}).get("source") or (data.get("originalimage") or {}).get("source") or "").strip()
+    except Exception:
+        return ""
+
+
 def normalize_symbol(value):
-    symbol = "".join(ch for ch in value.upper().strip() if ch.isalnum() or ch in ".-=")
+    symbol = "".join(ch for ch in value.upper().strip() if ch.isalnum() or ch in ".-=^")
     return symbol[:16]
 
 
@@ -976,6 +1240,19 @@ def local_translate_to_zh(text, symbol=""):
 
     if value == "Yahoo Finance headline feed item.":
         return "雅虎财经标题流条目。"
+    clean = re.sub(r"\s+-\s+[^-]{2,80}$", "", value)
+    match = re.match(r"^(.+?) Awards (\$[\d.]+[MBK]?) (.+?) Order to (.+?) for (.+)$", clean, re.I)
+    if match:
+        return postprocess_zh_translation(f"{match.group(1)} 向 {match.group(4)} 授予 {match.group(2)} {match.group(3)}订单，用于 {match.group(5)}")
+    match = re.match(r"^(.+?) Secures (\$[\d.]+[MBK]?) Order to Support (.+)$", clean, re.I)
+    if match:
+        return postprocess_zh_translation(f"{match.group(1)} 获得 {match.group(2)} 订单，用于支持 {match.group(3)}")
+    match = re.match(r"^Supports Volume Production Through (\d{4}) For (.+)$", clean, re.I)
+    if match:
+        return postprocess_zh_translation(f"支持 {match.group(2)} 的量产延续至 {match.group(1)}")
+    match = re.match(r"^(.+?) Says (.+?) Partnership Extends Beyond (.+?) to (.+)$", clean, re.I)
+    if match:
+        return postprocess_zh_translation(f"{match.group(1)} 称 {match.group(2)} 合作不止 {match.group(3)}，还延伸到 {match.group(4)}")
     return ""
 
 
@@ -1380,9 +1657,15 @@ def pattern_count(patterns, text, cap=3):
     return count
 
 
+def is_hard_low_value_news(text):
+    return any(re.search(pattern, text or "", re.I) for pattern in HARD_LOW_VALUE_NEWS_PATTERNS)
+
+
 def news_relevance_score(symbol, profile_id, title, summary, source_name):
     haystack = f"{title or ''} {summary or ''} {source_name or ''}"
     lower = haystack.lower()
+    if is_hard_low_value_news(lower):
+        return -99
     score = 0
 
     if title_directly_matches_company(title, symbol):
@@ -1830,6 +2113,744 @@ def evidence_payload(symbol):
     return store_cached_value(key, payload)
 
 
+def safe_int(value, default=0):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def reddit_trending_payload(force=False):
+    key = ("reddit-trending",)
+    if not force:
+        cached = cached_value(key, REDDIT_TRENDING_TTL_SECONDS)
+        if cached is not None:
+            return cached
+
+    raw = json.loads(http_text(
+        MEIGUHULI_CACHE,
+        ttl_seconds=0 if force else REDDIT_TRENDING_TTL_SECONDS,
+    ))
+    source_rows = raw.get("results") if isinstance(raw, dict) else []
+    items = []
+    for raw_item in source_rows[:250]:
+        ticker = normalize_symbol(html.unescape(str(raw_item.get("ticker") or "")))
+        if not ticker:
+            continue
+        rank = safe_int(raw_item.get("rank"), len(items) + 1)
+        mentions = safe_int(raw_item.get("mentions"))
+        previous_mentions = safe_int(raw_item.get("mentions_24h_ago"))
+        rank_24h_ago = safe_int(raw_item.get("rank_24h_ago"), 0)
+        mention_change_pct = None
+        if previous_mentions > 0:
+            mention_change_pct = round((mentions - previous_mentions) / previous_mentions * 100, 2)
+        items.append({
+            "rank": rank,
+            "ticker": ticker,
+            "name": clean_text(raw_item.get("name") or ticker, 180),
+            "mentions": mentions,
+            "upvotes": safe_int(raw_item.get("upvotes")),
+            "rank24hAgo": rank_24h_ago or None,
+            "rankChange": (rank_24h_ago - rank) if rank_24h_ago else None,
+            "mentions24hAgo": previous_mentions or None,
+            "mentionChangePct": mention_change_pct,
+        })
+
+    payload = {
+        "fetchedAt": now_iso(),
+        "cacheTtlSeconds": REDDIT_TRENDING_TTL_SECONDS,
+        "source": {
+            "name": "美股狐狸 Reddit 热度缓存",
+            "url": "https://meiguhuli.com/",
+            "api": MEIGUHULI_CACHE,
+            "status": "ok",
+            "count": len(items),
+            "detail": "过去 24 小时 Reddit 股票提及量，约 5 分钟更新一次。只作为社区情绪线索。",
+        },
+        "items": items,
+    }
+    return store_cached_value(key, payload)
+
+
+def parse_trade_amount(amount):
+    text = clean_text(amount or "", 64)
+    values = []
+    for raw in re.findall(r"[\d,]+", text):
+        try:
+            values.append(int(raw.replace(",", "")))
+        except ValueError:
+            continue
+    if not values:
+        return {"text": text or "--", "min": None, "max": None, "mid": None}
+    low = min(values)
+    high = max(values)
+    return {
+        "text": text,
+        "min": low,
+        "max": high,
+        "mid": int((low + high) / 2),
+    }
+
+
+def parse_iso_date(value):
+    try:
+        return datetime.strptime((value or "")[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def political_trade_type_zh(trade_type):
+    value = (trade_type or "").strip().lower()
+    if "purchase" in value or "buy" in value:
+        return "买入"
+    if "sale" in value or "sell" in value:
+        return "卖出"
+    return "披露"
+
+
+def political_trade_tone(trade_type, late_filing=False):
+    value = (trade_type or "").strip().lower()
+    if "purchase" in value or "buy" in value:
+        return "open" if not late_filing else "waiting"
+    if "sale" in value or "sell" in value:
+        return "closed"
+    return "waiting"
+
+
+def political_trade_payload(symbol="", force=False):
+    normalized_symbol = resolve_symbol(symbol) if symbol else ""
+    key = ("political-trades", normalized_symbol or "all")
+    if not force:
+        cached = cached_value(key, POLITICAL_TRADES_TTL_SECONDS)
+        if cached is not None:
+            return cached
+
+    dataset = http_json(
+        OPEN_CABINET_DATASET,
+        headers={"accept": "application/json", "user-agent": DEFAULT_HEADERS["user-agent"]},
+        ttl_seconds=0 if force else POLITICAL_TRADES_TTL_SECONDS,
+    )
+    officials = dataset.get("officials") or []
+    focus_symbols = {
+        "AMD", "AMZN", "AVGO", "CAT", "CRWV", "DELL", "GOOG", "GOOGL", "INTC",
+        "META", "MSFT", "MU", "NVDA", "ORCL", "PLTR", "QCOM", "SNDK", "TSLA", "TSM",
+    }
+    if normalized_symbol:
+        focus_symbols.add(normalized_symbol)
+
+    items = []
+    symbol_counts = {}
+    official_hits = {}
+    for official in officials:
+        slug = clean_text(official.get("slug") or "", 96)
+        official_url = f"{OPEN_CABINET_SITE}/officials/{quote(slug, safe='')}" if slug else OPEN_CABINET_SITE
+        filing_date = clean_text(official.get("mostRecentFilingDate") or "", 24)
+        for tx in official.get("transactions") or []:
+            ticker = normalize_symbol(tx.get("ticker") or "")
+            if not ticker:
+                continue
+            tx_date = parse_iso_date(tx.get("date"))
+            age_days = (date.today() - tx_date).days if tx_date else None
+            type_text = clean_text(tx.get("type") or "", 64)
+            amount = parse_trade_amount(tx.get("amount"))
+            late = bool(tx.get("lateFilingFlag"))
+            exact_match = bool(normalized_symbol and ticker == normalized_symbol)
+            in_focus = ticker in focus_symbols
+            symbol_counts[ticker] = symbol_counts.get(ticker, 0) + 1
+            if ticker not in official_hits:
+                official_hits[ticker] = set()
+            official_hits[ticker].add(slug or official.get("name") or ticker)
+            if not exact_match and not in_focus:
+                continue
+            score = 0
+            if exact_match:
+                score += 60
+            if "Purchase" in type_text:
+                score += 16
+            if amount["mid"]:
+                score += min(18, amount["mid"] / 100000)
+            if age_days is not None:
+                score += max(0, 18 - min(age_days, 180) / 10)
+            if late:
+                score += 5
+            item = {
+                "symbol": ticker,
+                "description": clean_text(tx.get("description") or ticker, 160),
+                "type": type_text,
+                "typeZh": political_trade_type_zh(type_text),
+                "tone": political_trade_tone(type_text, late),
+                "date": clean_text(tx.get("date") or "", 24),
+                "ageDays": age_days,
+                "amount": amount["text"],
+                "amountMin": amount["min"],
+                "amountMax": amount["max"],
+                "amountMid": amount["mid"],
+                "lateFilingFlag": late,
+                "official": clean_text(official.get("name") or "", 120),
+                "officialTitle": clean_text(official.get("title") or "", 160),
+                "agency": clean_text(official.get("agency") or "", 160),
+                "level": clean_text(official.get("level") or "", 80),
+                "filingDate": filing_date,
+                "officialUrl": official_url,
+                "score": round(score, 2),
+                "exact": exact_match,
+            }
+            items.append(item)
+
+    items.sort(key=lambda item: (
+        item.get("exact", False),
+        item.get("score") or 0,
+        item.get("date") or "",
+    ), reverse=True)
+    hot_symbols = sorted(
+        [
+            {
+                "symbol": ticker,
+                "count": count,
+                "officialCount": len(official_hits.get(ticker, [])),
+            }
+            for ticker, count in symbol_counts.items()
+        ],
+        key=lambda row: (row["count"], row["officialCount"]),
+        reverse=True,
+    )[:12]
+    visible_items = items[:18]
+    active_items = [item for item in items if normalized_symbol and item["symbol"] == normalized_symbol][:8]
+    payload = {
+        "fetchedAt": now_iso(),
+        "cacheTtlSeconds": POLITICAL_TRADES_TTL_SECONDS,
+        "source": {
+            "name": "Open Cabinet",
+            "status": "ok",
+            "count": len(items),
+            "transactionCount": safe_int(dataset.get("transactionCount")),
+            "officialCount": safe_int(dataset.get("officialCount")),
+            "exportedAt": clean_text(dataset.get("exportedAt") or "", 40),
+            "url": OPEN_CABINET_SITE,
+            "api": OPEN_CABINET_DATASET,
+            "detail": "OGE Form 278-T 财务披露整理数据，金额为披露区间，不是实时成交。"
+        },
+        "activeSymbol": normalized_symbol,
+        "activeItems": active_items,
+        "items": visible_items,
+        "hotSymbols": hot_symbols,
+        "links": [
+            {"label": "Open Cabinet", "url": OPEN_CABINET_SITE},
+            {"label": "OGE 原始披露", "url": "https://www.oge.gov/web/oge.nsf/Officials%20Individual%20Disclosures%20Search%20Collection?OpenForm"},
+            {"label": "ProPublica 补充搜索", "url": "https://projects.propublica.org/trump-team-financial-disclosures/"},
+        ],
+    }
+    return store_cached_value(key, payload)
+
+
+def safe_float(value, default=None):
+    try:
+        if value in {None, "", "null"}:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def congress_trade_type_zh(value):
+    text = (value or "").lower()
+    if "purchase" in text or text == "buy" or " buy" in text:
+        return "买入"
+    if "sale" in text or text == "sell" or " sell" in text:
+        return "卖出"
+    if "exchange" in text:
+        return "换仓"
+    return "披露"
+
+
+def congress_trade_tone(value):
+    text = (value or "").lower()
+    if "purchase" in text or text == "buy" or " buy" in text:
+        return "open"
+    if "sale" in text or text == "sell" or " sell" in text:
+        return "closed"
+    return "waiting"
+
+
+def normalize_symbols_param(value):
+    if not value:
+        return []
+    parts = re.split(r"[,|\s]+", value)
+    symbols = []
+    for part in parts:
+        symbol = resolve_symbol(part)
+        if symbol and symbol not in symbols:
+            symbols.append(symbol)
+    return symbols[:80]
+
+
+def congress_source_headers():
+    return {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,*/*;q=0.7",
+        "accept-language": "en-US,en;q=0.9",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    }
+
+
+def congress_amount_text(value):
+    text = clean_text(value, 90)
+    text = text.replace("$$", "$").replace("$ $", "$")
+    text = text.replace("–", "-").replace("—", "-").replace(" 每 ", "-").replace("每", "-")
+    text = re.sub(r"\s*-\s*", "-", text)
+    return text
+
+
+def first_anchor_text(fragment, limit=120):
+    match = re.search(r"<a\b[^>]*>(.*?)</a>", fragment or "", re.S)
+    return clean_text(match.group(1) if match else fragment, limit)
+
+
+def congressstock_house_party(fragment):
+    text = clean_text(re.sub(r".*?</a>", "", fragment or "", flags=re.S), 80)
+    lower = text.lower()
+    house = "House" if "house" in lower else "Senate" if "senate" in lower else "Congress"
+    party = ""
+    prefix = text.split("·", 1)[0].strip()
+    if prefix and prefix.lower() not in {"unknown", "n/a", "none"}:
+        party = prefix[:8]
+    return house, party
+
+
+def congressstock_rows_from_html(text, symbol_hint="", limit=80):
+    rows = []
+    symbol_hint = normalize_symbol(symbol_hint or "")
+    for tr in re.findall(r'<tr class="hover:bg-secondary/30 transition-colors">(.*?)</tr>', text or "", re.S):
+        cells = re.findall(r"<td\b[^>]*>(.*?)</td>", tr, re.S)
+        if symbol_hint and len(cells) >= 5:
+            date_text = clean_text(cells[0], 24)
+            representative = first_anchor_text(cells[1])
+            transaction = clean_text(cells[2], 40)
+            amount = congress_amount_text(cells[3])
+            security = clean_text(cells[4], 40)
+            rows.append({
+                "representative": representative,
+                "bioGuideId": "",
+                "party": "",
+                "house": "Congress",
+                "reportDate": "",
+                "transactionDate": date_text,
+                "reportLagDays": None,
+                "symbol": symbol_hint,
+                "transaction": transaction,
+                "transactionZh": congress_trade_type_zh(transaction),
+                "range": amount,
+                "amount": None,
+                "description": symbol_hint,
+                "priceChange": None,
+                "spyChange": None,
+                "excessReturn": None,
+                "lastModified": "",
+                "tone": congress_trade_tone(transaction),
+                "focus": True,
+                "sourceUrl": CONGRESSSTOCK_STOCK.format(symbol=quote(symbol_hint, safe="")),
+                "security": security,
+            })
+        elif len(cells) >= 7:
+            date_text = clean_text(cells[0], 24)
+            representative = first_anchor_text(cells[1])
+            house, party = congressstock_house_party(cells[1])
+            symbol_match = re.search(r'href="/stocks/([^"]+)"', cells[2], re.S)
+            ticker = normalize_symbol(symbol_match.group(1) if symbol_match else "")
+            if not ticker:
+                continue
+            description_match = re.search(r"</a>\s*(.*)", cells[2], re.S)
+            description = clean_text(description_match.group(1) if description_match else ticker, 160)
+            transaction = clean_text(cells[3], 40)
+            owner = clean_text(cells[4], 40)
+            amount = congress_amount_text(cells[5])
+            security = clean_text(cells[6], 40)
+            rows.append({
+                "representative": representative,
+                "bioGuideId": "",
+                "party": party,
+                "house": house,
+                "reportDate": "",
+                "transactionDate": date_text,
+                "reportLagDays": None,
+                "symbol": ticker,
+                "transaction": transaction,
+                "transactionZh": congress_trade_type_zh(transaction),
+                "range": amount,
+                "amount": None,
+                "description": description or ticker,
+                "priceChange": None,
+                "spyChange": None,
+                "excessReturn": None,
+                "lastModified": "",
+                "tone": congress_trade_tone(transaction),
+                "focus": False,
+                "sourceUrl": CONGRESSSTOCK_TRADES,
+                "owner": owner,
+                "security": security,
+            })
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def congressstock_items_for_focus(focus, force=False):
+    ttl = 0 if force else CONGRESS_TRADES_TTL_SECONDS
+    headers = congress_source_headers()
+    items = []
+    errors = []
+
+    try:
+        html_text = http_text(CONGRESSSTOCK_TRADES, headers=headers, ttl_seconds=ttl)
+        items.extend(congressstock_rows_from_html(html_text, limit=90))
+    except Exception as exc:
+        errors.append(f"recent: {str(exc)[:90]}")
+
+    focus_symbols = sorted(symbol for symbol in focus if symbol and symbol not in MONITOR_TICKER_BLACKLIST)[:18]
+
+    def fetch_symbol(symbol):
+        url = CONGRESSSTOCK_STOCK.format(symbol=quote(symbol, safe=""))
+        html_text = http_text(url, headers=headers, ttl_seconds=ttl)
+        return congressstock_rows_from_html(html_text, symbol_hint=symbol, limit=14)
+
+    if focus_symbols:
+        with ThreadPoolExecutor(max_workers=min(6, len(focus_symbols))) as executor:
+            futures = {executor.submit(fetch_symbol, symbol): symbol for symbol in focus_symbols}
+            for future in as_completed(futures):
+                symbol = futures[future]
+                try:
+                    items.extend(future.result())
+                except Exception as exc:
+                    errors.append(f"{symbol}: {str(exc)[:70]}")
+
+    detail = "CongressStock 可抓取来源；披露来自 STOCK Act PTR，通常晚于真实交易。"
+    if errors:
+        detail += f" 部分股票页未取到 {len(errors)} 个。"
+    return items, {
+        "name": "CongressStock",
+        "status": "ok" if items else "unavailable",
+        "count": len(items),
+        "url": CONGRESSSTOCK_TRADES,
+        "api": "",
+        "detail": detail,
+    }
+
+
+def congress_trade_payload(symbols=None, force=False):
+    symbols = symbols or []
+    focus = set(resolve_symbol(symbol) for symbol in symbols if symbol)
+    key = ("congress-trades", tuple(sorted(focus)))
+    if not force:
+        cached = cached_value(key, CONGRESS_TRADES_TTL_SECONDS)
+        if cached is not None:
+            return cached
+
+    items = []
+    seen = set()
+    source_info = {
+        "name": "Quiver Quant Congress Trading",
+        "status": "ok",
+        "count": 0,
+        "url": "https://quiverquant.com/congresstrading",
+        "api": QUIVER_CONGRESS_TRADING,
+        "detail": "STOCK Act 披露数据，交易后最多可延迟约 45 天披露，金额为区间。",
+    }
+    quiver_error = ""
+
+    try:
+        raw_rows = http_json(
+            QUIVER_CONGRESS_TRADING,
+            headers={
+                "accept": "application/json,text/plain,*/*",
+                "accept-language": "en-US,en;q=0.9",
+                "referer": "https://quiverquant.com/",
+                "user-agent": congress_source_headers()["user-agent"],
+            },
+            ttl_seconds=0 if force else CONGRESS_TRADES_TTL_SECONDS,
+        )
+        if not isinstance(raw_rows, list):
+            raw_rows = []
+
+        for row in raw_rows:
+            if not isinstance(row, dict):
+                continue
+            ticker = normalize_symbol(row.get("Ticker") or "")
+            ticker_type = clean_text(row.get("TickerType") or "", 32).lower()
+            if not ticker or ticker in MONITOR_TICKER_BLACKLIST:
+                continue
+            if ticker_type and ticker_type not in {"st", "stock"}:
+                continue
+            representative = clean_text(row.get("Representative") or "", 120)
+            transaction = clean_text(row.get("Transaction") or "", 80)
+            tx_date = clean_text(row.get("TransactionDate") or "", 24)
+            report_date = clean_text(row.get("ReportDate") or "", 24)
+            key_row = (representative, ticker, transaction, tx_date, report_date, clean_text(row.get("Range") or "", 80))
+            if key_row in seen:
+                continue
+            seen.add(key_row)
+            tx_dt = parse_iso_date(tx_date)
+            report_dt = parse_iso_date(report_date)
+            report_lag = (report_dt - tx_dt).days if tx_dt and report_dt else None
+            items.append({
+                "representative": representative,
+                "bioGuideId": clean_text(row.get("BioGuideID") or "", 24),
+                "party": clean_text(row.get("Party") or "", 8),
+                "house": clean_text(row.get("House") or "", 32),
+                "reportDate": report_date,
+                "transactionDate": tx_date,
+                "reportLagDays": report_lag,
+                "symbol": ticker,
+                "transaction": transaction,
+                "transactionZh": congress_trade_type_zh(transaction),
+                "range": congress_amount_text(row.get("Range") or ""),
+                "amount": safe_float(row.get("Amount")),
+                "description": clean_text(row.get("Description") or "", 160),
+                "priceChange": safe_float(row.get("PriceChange")),
+                "spyChange": safe_float(row.get("SPYChange")),
+                "excessReturn": safe_float(row.get("ExcessReturn")),
+                "lastModified": clean_text(row.get("last_modified") or "", 24),
+                "tone": congress_trade_tone(transaction),
+                "focus": ticker in focus,
+            })
+    except Exception as exc:
+        quiver_error = str(exc)[:120]
+
+    if not items:
+        items, source_info = congressstock_items_for_focus(focus, force=force)
+        if quiver_error:
+            source_info["detail"] += f" Quiver 当前未返回：{quiver_error}。"
+
+    deduped = []
+    seen = set()
+    for item in items:
+        ticker = normalize_symbol(item.get("symbol") or "")
+        if not ticker or ticker in MONITOR_TICKER_BLACKLIST:
+            continue
+        item["symbol"] = ticker
+        item["focus"] = bool(item.get("focus")) or ticker in focus
+        key_row = (
+            item.get("representative") or "",
+            ticker,
+            item.get("transaction") or item.get("transactionZh") or "",
+            item.get("transactionDate") or "",
+            item.get("reportDate") or "",
+            item.get("range") or "",
+        )
+        if key_row in seen:
+            continue
+        seen.add(key_row)
+        deduped.append(item)
+    items = deduped
+    source_info["count"] = len(items)
+    if not items:
+        source_info["status"] = "unavailable"
+
+    items.sort(key=lambda item: (
+        item.get("reportDate") or "",
+        item.get("transactionDate") or "",
+        item.get("lastModified") or "",
+    ), reverse=True)
+
+    symbol_stats = {}
+    for item in items:
+        stat = symbol_stats.setdefault(item["symbol"], {
+            "symbol": item["symbol"],
+            "count": 0,
+            "buy": 0,
+            "sell": 0,
+            "latestReportDate": "",
+            "latestTransactionDate": "",
+            "representatives": set(),
+        })
+        stat["count"] += 1
+        if item["transactionZh"] == "买入":
+            stat["buy"] += 1
+        elif item["transactionZh"] == "卖出":
+            stat["sell"] += 1
+        if item["reportDate"] > stat["latestReportDate"]:
+            stat["latestReportDate"] = item["reportDate"]
+        if item["transactionDate"] > stat["latestTransactionDate"]:
+            stat["latestTransactionDate"] = item["transactionDate"]
+        if item["representative"]:
+            stat["representatives"].add(item["representative"])
+
+    hot_symbols = sorted(symbol_stats.values(), key=lambda item: (
+        item["count"],
+        item["buy"] - item["sell"],
+        item["latestReportDate"],
+    ), reverse=True)[:15]
+    for item in hot_symbols:
+        item["representativeCount"] = len(item.pop("representatives", set()))
+
+    focus_items = [item for item in items if item["focus"]][:24]
+    purchase_items = [item for item in items if item["transactionZh"] == "买入"][:24]
+    payload = {
+        "fetchedAt": now_iso(),
+        "cacheTtlSeconds": CONGRESS_TRADES_TTL_SECONDS,
+        "source": source_info,
+        "focusSymbols": sorted(focus),
+        "focusItems": focus_items,
+        "recentItems": items[:40],
+        "purchaseItems": purchase_items,
+        "hotSymbols": hot_symbols,
+        "links": [
+            {"label": "Quiver Quant", "url": "https://quiverquant.com/congresstrading"},
+            {"label": "Capitol Trades", "url": "https://www.capitoltrades.com/trades"},
+            {"label": "Unusual Whales", "url": "https://unusualwhales.com/politics"},
+            {"label": "CongressStock", "url": "https://www.congressstock.com/trades"},
+        ],
+    }
+    return store_cached_value(key, payload)
+
+
+def fred_api_key():
+    for name in ("FRED_API_KEY", "SERENITY_FRED_API_KEY"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def format_macro_value(value, precision=2, unit=""):
+    if value is None:
+        return "--"
+    if unit == "%":
+        return f"{value:.{precision}f}%"
+    if unit == "pct":
+        return f"{value:.{precision}f}pct"
+    return f"{value:.{precision}f}"
+
+
+def parse_fred_observations(payload, limit=18):
+    values = []
+    for row in (payload.get("observations") or [])[:limit]:
+        raw = row.get("value")
+        if raw in {None, "", "."}:
+            continue
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        values.append({"date": row.get("date"), "value": value})
+    return values
+
+
+def macro_tone(series_id, value, delta):
+    if value is None:
+        return "waiting"
+    if series_id == "DGS10":
+        if value >= 4.75 or (delta or 0) >= 0.18:
+            return "closed"
+        if value <= 4.15:
+            return "open"
+    if series_id == "T10Y2Y":
+        if value < -0.55:
+            return "waiting"
+        if value > 0.2:
+            return "open"
+    if series_id == "BAMLH0A0HYM2":
+        if value >= 4.8 or (delta or 0) >= 0.35:
+            return "closed"
+        if value <= 3.6:
+            return "open"
+    if series_id == "UNRATE":
+        if value >= 4.5 or (delta or 0) >= 0.2:
+            return "waiting"
+    if series_id == "CPIAUCSL":
+        if (delta or 0) >= 0.8:
+            return "waiting"
+    return "neutral"
+
+
+def fred_macro_verdict(items):
+    item_by_id = {item["id"]: item for item in items}
+    ten_year = item_by_id.get("DGS10", {}).get("value")
+    curve = item_by_id.get("T10Y2Y", {}).get("value")
+    credit = item_by_id.get("BAMLH0A0HYM2", {}).get("value")
+    if ten_year is None and curve is None and credit is None:
+        return {"label": "等待 FRED", "tone": "waiting", "note": "配置 FRED_API_KEY 后读取官方宏观序列。"}
+    if (ten_year is not None and ten_year >= 4.75) or (credit is not None and credit >= 4.8):
+        return {"label": "宏观逆风", "tone": "closed", "note": "长端利率或信用利差偏高，成长股估值要更保守。"}
+    if curve is not None and curve < -0.55:
+        return {"label": "曲线倒挂", "tone": "waiting", "note": "收益率曲线仍偏紧，先降低追涨冲动。"}
+    if (ten_year is not None and ten_year <= 4.15) and (credit is None or credit <= 3.8):
+        return {"label": "宏观顺风", "tone": "open", "note": "利率和信用条件相对友好，适合重点看强证据标的。"}
+    return {"label": "宏观中性", "tone": "waiting", "note": "宏观没有给出强方向，优先按个股证据排序。"}
+
+
+def fred_macro_payload(force=False):
+    key = ("fred-macro",)
+    if not force:
+        cached = cached_value(key, FRED_CACHE_TTL_SECONDS)
+        if cached is not None:
+            return cached
+
+    api_key = fred_api_key()
+    if not api_key:
+        payload = {
+            "fetchedAt": now_iso(),
+            "cacheTtlSeconds": 0,
+            "source": {
+                "name": "FRED",
+                "status": "needs_key",
+                "count": 0,
+                "detail": "等待 FRED_API_KEY 环境变量。",
+                "url": "https://fred.stlouisfed.org/docs/api/fred/",
+            },
+            "verdict": {"label": "等待 FRED", "tone": "waiting", "note": "配置 FRED_API_KEY 后接入官方宏观序列。"},
+            "items": [],
+        }
+        return store_cached_value(key, payload)
+
+    items = []
+    errors = []
+    for series in FRED_MACRO_SERIES:
+        try:
+            url = FRED_OBSERVATIONS.format(
+                series_id=quote(series["id"], safe=""),
+                api_key=quote(api_key, safe=""),
+                limit=18,
+            )
+            data = http_json(url, headers={"accept": "application/json", "user-agent": DEFAULT_HEADERS["user-agent"]}, ttl_seconds=0 if force else FRED_CACHE_TTL_SECONDS)
+            values = parse_fred_observations(data)
+            latest = values[0] if values else {}
+            previous = values[1] if len(values) > 1 else {}
+            value = latest.get("value")
+            prev_value = previous.get("value")
+            delta = value - prev_value if value is not None and prev_value is not None else None
+            precision = series.get("precision", 2)
+            unit = series.get("unit", "")
+            items.append({
+                "id": series["id"],
+                "label": series["label"],
+                "note": series.get("note", ""),
+                "date": latest.get("date"),
+                "value": value,
+                "valueText": format_macro_value(value, precision, unit),
+                "previous": prev_value,
+                "delta": delta,
+                "deltaText": ("+" if delta is not None and delta >= 0 else "") + format_macro_value(delta, precision, "pct") if delta is not None else "--",
+                "tone": macro_tone(series["id"], value, delta),
+            })
+        except Exception as exc:
+            errors.append(f"{series['id']}: {str(exc)[:80]}")
+
+    status = "ok" if items else "unavailable"
+    payload = {
+        "fetchedAt": now_iso(),
+        "cacheTtlSeconds": FRED_CACHE_TTL_SECONDS,
+        "source": {
+            "name": "FRED",
+            "status": status,
+            "count": len(items),
+            "detail": "; ".join(errors[:3]) if errors and not items else ("部分序列暂不可用。" if errors else "官方宏观序列已连接。"),
+            "url": "https://fred.stlouisfed.org/",
+        },
+        "verdict": fred_macro_verdict(items),
+        "items": items,
+    }
+    return store_cached_value(key, payload)
+
+
 def serve_company_logo(handler, symbol):
     symbol = resolve_symbol(symbol)
     domain = COMPANY_DOMAINS.get(symbol)
@@ -1849,20 +2870,36 @@ def serve_company_logo(handler, symbol):
 
 def serve_person_image(handler, person_id):
     person_id = re.sub(r"[^a-z0-9_-]", "", person_id.lower())[:40]
-    url = PERSON_IMAGES.get(person_id)
-    if not url:
-        json_response(handler, {"error": "Person image not configured"}, status=404)
-        return
-    payload = http_bytes(url, headers={
-        "accept": "image/avif,image/webp,image/jpeg,image/png,image/*,*/*;q=0.8",
-        "user-agent": "Mozilla/5.0 Serenity-US-Stock-Desk/1.0",
-    })
-    binary_response(handler, payload["body"], payload["content_type"])
+    urls = []
+    if PERSON_IMAGES.get(person_id, "").startswith("http"):
+        urls.append(PERSON_IMAGES[person_id])
+    wiki_thumb = wiki_person_thumbnail_url(person_id)
+    if wiki_thumb and wiki_thumb not in urls:
+        urls.append(wiki_thumb)
+    for url in urls:
+        try:
+            payload = http_bytes(url, headers={
+                "accept": "image/avif,image/webp,image/jpeg,image/png,image/*,*/*;q=0.8",
+                "user-agent": "Mozilla/5.0 Serenity-US-Stock-Desk/1.0",
+            })
+            binary_response(handler, payload["body"], payload["content_type"])
+            return
+        except Exception:
+            continue
+    binary_response(handler, person_badge_svg(person_id), "image/svg+xml")
 
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
+
+    def end_headers(self):
+        clean_path = urlparse(self.path).path
+        if clean_path in {"/", "/index.html"} or clean_path.endswith((".js", ".css")):
+            self.send_header("cache-control", "no-store, max-age=0")
+            self.send_header("pragma", "no-cache")
+            self.send_header("expires", "0")
+        super().end_headers()
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -1891,6 +2928,24 @@ class Handler(SimpleHTTPRequestHandler):
                 handle = unquote(parsed.path.rsplit("/", 1)[-1])
                 force = (query.get("force") or ["0"])[0] == "1"
                 json_response(self, monitor_payload(handle, bearer_from_request(self), force=force))
+                return
+            if parsed.path == "/api/reddit-trending":
+                force = (query.get("force") or ["0"])[0] == "1"
+                json_response(self, reddit_trending_payload(force=force))
+                return
+            if parsed.path == "/api/fred-macro":
+                force = (query.get("force") or ["0"])[0] == "1"
+                json_response(self, fred_macro_payload(force=force))
+                return
+            if parsed.path == "/api/political-trades":
+                force = (query.get("force") or ["0"])[0] == "1"
+                symbol = (query.get("symbol") or [""])[0]
+                json_response(self, political_trade_payload(symbol=symbol, force=force))
+                return
+            if parsed.path == "/api/congress-trades":
+                force = (query.get("force") or ["0"])[0] == "1"
+                symbols = normalize_symbols_param((query.get("symbols") or [""])[0])
+                json_response(self, congress_trade_payload(symbols=symbols, force=force))
                 return
             if parsed.path.startswith("/api/chart/"):
                 symbol = resolve_symbol(unquote(parsed.path.rsplit("/", 1)[-1]))
