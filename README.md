@@ -85,6 +85,11 @@ git push -u origin main
 - Yahoo Finance chart API，用于行情和汇率。
 - SEC EDGAR，用于美股公司 filings。
 - X API v2 或自定义 RSS，用于喊单监控。
+- FRED API，用于宏观面板。可选环境变量：`FRED_API_KEY`。
+- Open Cabinet / OGE 278-T，保留为后端参考源。它是延迟披露源，金额为区间，不是实时成交。
+- Quiver Quant + CongressStock，用于持仓页的国会交易风向。它来自 STOCK Act 披露，交易和披露之间通常有时间差；Capitol Trades 和 Unusual Whales 作为外链核验入口。
+- 聪明钱持仓页包含来源等级：13F 官方、13D/13G 激进披露、国会披露、基金披露、模拟组合和人工维护会分开标识。已补阿克曼、泰珀、盖茨基金会、李录、德鲁肯米勒、Burry/Scion、Coatue、Tiger Global 和激进资金雷达；13F/13D 仍是滞后披露，不伪装成实时交易。
+- TradingView 外链入口，用于打开当前标的的专业图表页。
 - 公司官网 favicon 和公开头像资源，用于持仓榜视觉识别。
 
 ## 文件
