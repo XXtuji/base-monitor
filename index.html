@@ -3,22 +3,53 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Serenity Ultimate US Stock Terminal</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <title>发财小鸡美股调研</title>
+  <script>
+    try {
+      const savedTheme = localStorage.getItem("serenity.theme");
+      document.documentElement.dataset.theme = savedTheme === "dark" ? "dark" : "light";
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="/styles.css?v=20260610-finaldesk4" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
       <div class="brand">
-        <div class="mark" aria-hidden="true">S</div>
+        <div class="mark" aria-hidden="true">
+          <svg class="chick-logo" viewBox="0 0 64 64" focusable="false">
+            <circle class="chick-body" cx="32" cy="34" r="20" />
+            <circle class="chick-wing" cx="23" cy="37" r="6" />
+            <path class="chick-comb" d="M22 17c2-7 8-7 10-1 3-6 10-4 9 3" />
+            <path class="chick-beak" d="M37 31l11 5-11 5z" />
+            <circle class="chick-eye" cx="27" cy="29" r="2.6" />
+            <path class="chick-leg" d="M25 52v5m14-5v5" />
+          </svg>
+        </div>
         <div>
-          <h1>Serenity Ultimate 美股终端</h1>
-          <p>供应链瓶颈 · GF-DMA · Bayesian 增长 · TAM-PEG · Alpha 验证</p>
+          <h1>发财小鸡美股调研</h1>
+          <p id="brandSubtitle">盯盘模式 · 自选雷达 · 提醒 · 事件聚合</p>
         </div>
       </div>
       <div class="top-actions">
         <span id="marketClock" class="market-clock">--</span>
-        <button id="refreshButton" class="icon-button" type="button" aria-label="刷新研究终端" title="刷新研究终端">
+        <div class="view-mode-switch" aria-label="页面模式">
+          <button class="active" data-view-mode="watch" type="button">盯盘</button>
+          <button data-view-mode="research" type="button">深研</button>
+          <button data-view-mode="portfolio" type="button">持仓</button>
+        </div>
+        <div class="theme-switch" aria-label="主题切换">
+          <button class="active" data-theme-choice="light" type="button" title="日光">
+            <span class="theme-dot light"></span><em>日</em>
+          </button>
+          <button data-theme-choice="dark" type="button" title="夜间">
+            <span class="theme-dot dark"></span><em>夜</em>
+          </button>
+        </div>
+        <button id="settingsToggle" class="icon-button" type="button" aria-label="打开设置" title="设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.9 4.6 1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.23.47.73.78 1.25.78H21a2 2 0 0 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg>
+        </button>
+        <button id="refreshButton" class="icon-button" type="button" aria-label="刷新发财小鸡美股调研" title="刷新发财小鸡美股调研">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.9 4M4 12A8 8 0 0 1 18.9 8M19 4v4h-4M5 20v-4h4"/></svg>
         </button>
       </div>
@@ -33,6 +64,7 @@
               <input id="symbolInput" autocomplete="off" placeholder="NVDA / 英伟达 / SIVE" />
               <button id="addSymbolButton" type="button">打开</button>
             </div>
+            <div id="symbolSuggestions" class="symbol-suggestions" hidden></div>
           </label>
           <div class="segmented filter-tabs" aria-label="候选池过滤">
             <button class="active" data-filter="all" type="button">全部</button>
@@ -42,14 +74,25 @@
           </div>
         </section>
 
-        <section class="panel china-session-panel">
+        <section class="panel watchlist-panel">
           <div class="section-head">
             <div>
-              <h2>中国看盘窗口</h2>
-              <p>北京时间 · 美股常规盘 · 人民币估算</p>
+              <h2>自选清单</h2>
+              <p id="watchlistMeta">本机保存 · 最多显示 18 个</p>
+            </div>
+            <button id="watchlistToggleButton" class="mini-action" type="button">加入当前</button>
+          </div>
+          <div id="watchlistRows" class="watchlist-rows" aria-live="polite"></div>
+        </section>
+
+        <section class="panel mover-panel">
+          <div class="section-head">
+            <div>
+              <h2>今日异动雷达</h2>
+              <p>先看异常，再看证据</p>
             </div>
           </div>
-          <div id="chinaSessionPanel" class="china-session-body"></div>
+          <div id="moverRadar" class="mover-radar" aria-live="polite"></div>
         </section>
 
         <section class="panel layer-panel">
@@ -74,6 +117,70 @@
       </aside>
 
       <section class="center-stack">
+        <section class="panel market-env-panel">
+          <div class="section-head">
+            <div>
+              <h2>大盘环境</h2>
+              <p id="marketEnvMeta">纳指、半导体、波动率、利率、汇率、BTC</p>
+            </div>
+          </div>
+          <div id="marketEnvironment" class="market-environment" aria-live="polite"></div>
+        </section>
+
+        <section class="panel macro-panel">
+          <div class="section-head macro-head">
+            <div>
+              <h2>FRED 宏观面板</h2>
+              <p id="macroMeta">等待 FRED 官方宏观序列</p>
+            </div>
+            <button id="macroRefreshButton" class="icon-button" type="button" aria-label="刷新 FRED 宏观" title="刷新 FRED 宏观">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
+            </button>
+          </div>
+          <div id="macroBoard" class="macro-board" aria-live="polite"></div>
+        </section>
+
+        <section class="panel daily-brief-panel">
+          <div class="section-head">
+            <div>
+              <h2>每日简报</h2>
+              <p id="dailyBriefMeta">盘前、盘中、盘后自动换重点</p>
+            </div>
+          </div>
+          <div id="dailyBriefBoard" class="daily-brief-board" aria-live="polite"></div>
+        </section>
+
+        <section class="panel session-playbook-panel">
+          <div class="section-head">
+            <div>
+              <h2>今日盯盘模式</h2>
+              <p id="sessionModeMeta">按盘前、盘中、盘后自动切任务</p>
+            </div>
+          </div>
+          <div id="sessionModeBoard" class="session-mode-board" aria-live="polite"></div>
+        </section>
+
+        <section class="panel watch-radar-panel">
+          <div class="section-head">
+            <div>
+              <h2>自选雷达总榜</h2>
+              <p id="watchRadarMeta">按异动、证据、回踩、催化剂和风险排序</p>
+            </div>
+          </div>
+          <div id="watchRadarBoard" class="watch-radar-board" aria-live="polite"></div>
+        </section>
+
+        <section class="panel compare-panel">
+          <div class="section-head compare-head">
+            <div>
+              <h2>个股对比</h2>
+              <p id="compareMeta">最多 4 个标的 · 对比分数、证据和价格位置</p>
+            </div>
+            <button id="compareAddActive" class="mini-action" type="button">加入对比</button>
+          </div>
+          <div id="compareBoard" class="compare-board" aria-live="polite"></div>
+        </section>
+
         <section class="panel hero-panel">
           <div class="quote-head">
             <div>
@@ -102,6 +209,16 @@
 
           <div id="chinaActionStrip" class="china-action-strip"></div>
 
+          <section class="decision-panel decision-in-hero">
+            <div class="section-head">
+              <div>
+                <h2>今日决策台</h2>
+                <p id="decisionMeta">载入中</p>
+              </div>
+            </div>
+            <div id="decisionBoard" class="decision-board" aria-live="polite"></div>
+          </section>
+
           <div class="chart-toolbar">
             <div class="segmented range-tabs" aria-label="价格区间">
               <button data-range="3mo" type="button">3月</button>
@@ -109,10 +226,13 @@
               <button data-range="1y" type="button">1年</button>
               <button data-range="2y" type="button">2年</button>
             </div>
-            <div class="legend">
-              <span><i class="line-price"></i>价格</span>
-              <span><i class="line-sma"></i>20DMA</span>
-              <span><i class="bar-volume"></i>成交量</span>
+            <div class="chart-actions">
+              <div class="legend">
+                <span><i class="line-price"></i>价格</span>
+                <span><i class="line-sma"></i>20DMA</span>
+                <span><i class="bar-volume"></i>成交量</span>
+              </div>
+              <a id="tradingViewLink" class="tradingview-link" href="https://www.tradingview.com/chart/" target="_blank" rel="noreferrer">TradingView</a>
             </div>
           </div>
 
@@ -121,29 +241,31 @@
             <div id="chartTooltip" class="chart-tooltip" hidden></div>
             <div id="chartState" class="chart-state">正在载入价格数据</div>
           </div>
+
+          <div id="researchSummaryBox" class="research-summary-box" aria-live="polite"></div>
+        </section>
+
+        <section class="panel research-pack-panel">
+          <div class="section-head">
+            <div>
+              <h2>个股调研包</h2>
+              <p id="researchPackMeta">公司、收入、产业链、对手、证据和看错条件</p>
+            </div>
+          </div>
+          <div id="researchPackBoard" class="research-pack-board" aria-live="polite"></div>
         </section>
 
         <section class="panel signal-monitor-panel">
           <div class="section-head monitor-head">
             <div>
               <h2>X 喊单监控</h2>
-              <p id="monitorMeta">@aleabitoreddit · 开盘窗口才列入可买 · 90 秒轮询</p>
+              <p id="monitorMeta">@aleabitoreddit · 开盘窗口才列入盯盘 · 90 秒轮询</p>
             </div>
             <div class="monitor-actions">
               <span id="monitorStatusPill" class="monitor-status-pill">未连接</span>
               <button id="monitorRefreshButton" class="icon-button" type="button" aria-label="刷新喊单监控" title="刷新喊单监控">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
               </button>
-            </div>
-          </div>
-          <div id="monitorTokenSetup" class="monitor-setup" hidden>
-            <div>
-              <strong>需要 X Bearer Token</strong>
-              <span>用于读取公开时间线；只保存在本机浏览器，不写入代码。</span>
-            </div>
-            <div class="monitor-token-row">
-              <input id="monitorTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴 X API Bearer Token" />
-              <button id="monitorTokenSave" type="button">保存并刷新</button>
             </div>
           </div>
           <div id="monitorSummary" class="monitor-summary"></div>
@@ -154,45 +276,72 @@
         <section class="panel smart-money-panel">
           <div class="section-head smart-money-head">
             <div>
-              <h2>Smart Money 持仓榜</h2>
+              <h2>聪明钱持仓榜</h2>
               <p id="portfolioMeta">250 日组合收益 · Top holdings · 与 SPY 对比</p>
             </div>
             <div class="segmented portfolio-tabs" aria-label="持仓榜过滤">
               <button class="active" data-portfolio-filter="all" type="button">全部</button>
               <button data-portfolio-filter="guru" type="button">大师</button>
+              <button data-portfolio-filter="activist" type="button">激进</button>
               <button data-portfolio-filter="congress" type="button">国会</button>
+              <button data-portfolio-filter="government" type="button">政府</button>
               <button data-portfolio-filter="ai" type="button">AI</button>
             </div>
           </div>
+          <div id="portfolioSourceAudit" class="portfolio-source-audit" aria-live="polite"></div>
+          <div id="portfolioConsensus" class="portfolio-consensus" aria-live="polite"></div>
           <div class="portfolio-layout">
             <div id="portfolioSpotlight" class="portfolio-spotlight"></div>
             <div id="portfolioBoard" class="portfolio-board" aria-live="polite"></div>
           </div>
+          <div class="thirteenf-module">
+            <div class="section-head thirteenf-head">
+              <div>
+                <h2>13F 变化队列</h2>
+                <p>官方季度披露、激进资金和待接入大佬</p>
+              </div>
+            </div>
+            <div id="thirteenFQueue" class="thirteenf-queue" aria-live="polite"></div>
+          </div>
+          <div class="congress-trades-module">
+            <div class="section-head congress-trades-head">
+              <div>
+                <strong>国会交易风向</strong>
+                <span id="congressTradesMeta">Quiver Quant · STOCK Act 披露 · 只作延迟线索</span>
+              </div>
+              <div class="congress-trades-actions">
+                <button id="congressTradesRefresh" class="icon-button" type="button" aria-label="刷新国会交易风向" title="刷新国会交易风向">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
+                </button>
+              </div>
+            </div>
+            <div id="congressTradesBoard" class="congress-trades-board" aria-live="polite"></div>
+          </div>
         </section>
 
-        <section class="engine-grid">
+        <section class="engine-grid" aria-label="评分引擎">
           <article class="panel engine-card">
-            <div class="engine-head"><h3>供应链瓶颈</h3><strong id="bottleneckScore">--</strong></div>
+            <div class="engine-head"><h3>供应链卡点</h3><strong id="bottleneckScore">--</strong></div>
             <div id="bottleneckBars" class="score-bars"></div>
           </article>
           <article class="panel engine-card">
-            <div class="engine-head"><h3>GF-DMA 健康</h3><strong id="gfDmaScore">--</strong></div>
+            <div class="engine-head"><h3>趋势健康</h3><strong id="gfDmaScore">--</strong></div>
             <div id="gfDmaBars" class="score-bars"></div>
           </article>
           <article class="panel engine-card">
-            <div class="engine-head"><h3>Serenity Alpha</h3><strong id="alphaScore">--</strong></div>
+            <div class="engine-head"><h3>Alpha 传导</h3><strong id="alphaScore">--</strong></div>
             <div id="alphaBars" class="score-bars"></div>
           </article>
           <article class="panel engine-card">
-            <div class="engine-head"><h3>Bayesian 增长</h3><strong id="bayesianScore">--</strong></div>
+            <div class="engine-head"><h3>增长假设</h3><strong id="bayesianScore">--</strong></div>
             <div id="bayesianBars" class="score-bars"></div>
           </article>
           <article class="panel engine-card">
-            <div class="engine-head"><h3>TAM-Adj-PEG</h3><strong id="tamPegScore">--</strong></div>
+            <div class="engine-head"><h3>估值压力</h3><strong id="tamPegScore">--</strong></div>
             <div id="tamPegDetails" class="detail-list"></div>
           </article>
           <article class="panel engine-card">
-            <div class="engine-head"><h3>语料/主题信号</h3><strong id="corpusScore">--</strong></div>
+            <div class="engine-head"><h3>证据质量</h3><strong id="corpusScore">--</strong></div>
             <div id="corpusDetails" class="detail-list"></div>
           </article>
         </section>
@@ -200,8 +349,8 @@
         <section class="panel framework-panel">
           <div class="section-head">
             <div>
-              <h2>完整框架 Ledger</h2>
-              <p>从叙事拆到财报、估值、趋势和证据</p>
+              <h2>框架 Ledger</h2>
+              <p>默认收起长说明，保留验证主线</p>
             </div>
           </div>
           <div id="frameworkLedger" class="framework-ledger"></div>
@@ -209,6 +358,109 @@
       </section>
 
       <aside class="right-rail">
+        <section id="settingsPanel" class="panel settings-panel" hidden>
+          <div class="section-head">
+            <div>
+              <h2>设置</h2>
+              <p>数据源、新闻严格度和本机 Token</p>
+            </div>
+          </div>
+          <div class="settings-body">
+            <div id="monitorTokenSetup" class="monitor-setup">
+              <div>
+                <strong>X Bearer Token</strong>
+                <span>用于读取公开时间线；只保存在本机浏览器，不写入代码。</span>
+              </div>
+              <div class="monitor-token-row">
+                <input id="monitorTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴 X API Bearer Token" />
+                <button id="monitorTokenSave" type="button">保存并刷新</button>
+              </div>
+            </div>
+            <div class="setting-block">
+              <span>新闻严格度</span>
+              <div class="segmented news-strictness-tabs" aria-label="新闻严格度">
+                <button class="active" data-news-strictness="balanced" type="button">均衡</button>
+                <button data-news-strictness="strict" type="button">严格</button>
+                <button data-news-strictness="official" type="button">官方</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel alerts-panel">
+          <div class="section-head">
+            <div>
+              <h2>今日待处理</h2>
+              <p>读原文、等回踩、看价格，按行动排队</p>
+            </div>
+          </div>
+          <div id="alertList" class="alert-list" aria-live="polite"></div>
+        </section>
+
+        <section class="panel reddit-trending-panel">
+          <div class="section-head reddit-trending-head">
+            <div>
+              <h2>Reddit 24h 热度</h2>
+              <p id="redditTrendingMeta">美股狐狸缓存 · 实时社区讨论</p>
+            </div>
+            <button id="redditTrendingRefresh" class="icon-button" type="button" aria-label="刷新 Reddit 热度" title="刷新 Reddit 热度">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
+            </button>
+          </div>
+          <div id="redditTrendingList" class="reddit-trending-list" aria-live="polite"></div>
+        </section>
+
+        <section class="panel portfolio-exposure-panel">
+          <div class="section-head">
+            <div>
+              <h2>持仓命中</h2>
+              <p id="portfolioExposureMeta">当前标的在哪些组合里</p>
+            </div>
+          </div>
+          <div id="portfolioExposureList" class="portfolio-exposure-list" aria-live="polite"></div>
+        </section>
+
+        <section class="panel alert-rules-panel">
+          <div class="section-head">
+            <div>
+              <h2>提醒规则中心</h2>
+              <p id="alertRulesMeta">强证据、20DMA、RSI、喊单、SEC/IR</p>
+            </div>
+          </div>
+          <div id="alertRulesList" class="alert-rules-list" aria-live="polite"></div>
+        </section>
+
+        <section class="panel data-health-panel">
+          <div class="section-head">
+            <div>
+              <h2>数据健康</h2>
+              <p id="dataHealthMeta">行情、证据、X 源和本机缓存</p>
+            </div>
+          </div>
+          <div id="dataHealthList" class="data-health-list" aria-live="polite"></div>
+          <div id="sourceHealthList" class="source-health-list" aria-live="polite"></div>
+        </section>
+
+        <section class="panel event-panel">
+          <div class="section-head">
+            <div>
+              <h2>事件聚合</h2>
+              <p id="eventClusterMeta">同一催化剂合并看，减少重复新闻</p>
+            </div>
+          </div>
+          <div id="eventClusterList" class="event-cluster-list" aria-live="polite"></div>
+        </section>
+
+        <section class="panel catalyst-panel">
+          <div class="section-head">
+            <div>
+              <h2>催化剂日历</h2>
+              <p>财报、SEC、IR、订单和待确认事项</p>
+            </div>
+          </div>
+          <div id="catalystCalendar" class="catalyst-list" aria-live="polite"></div>
+        </section>
+
         <section class="panel memo-panel">
           <div class="section-head">
             <div>
@@ -223,9 +475,10 @@
           <div class="section-head">
             <div>
               <h2>证据阶梯</h2>
-              <p>Strong / Medium / Weak / Needs checking</p>
+              <p>强证据 / 中等线索 / 弱线索 / 待核验</p>
             </div>
           </div>
+          <div id="evidenceEventDigest" class="evidence-event-digest" aria-live="polite"></div>
           <div id="evidenceList" class="evidence-list"></div>
         </section>
 
@@ -240,13 +493,20 @@
         </section>
 
         <section class="panel boundary-panel">
-          <h2>边界</h2>
-          <p>我会按研究优先级排序，买卖动作由你自己决定。当前页面的估值和证据模块包含启发式假设，强结论要回到 SEC 文件、财报电话会、IR 材料和客户/供应商公开证据。</p>
+          <div class="section-head">
+            <div>
+              <h2>边界</h2>
+              <p>研究边界和风险提示</p>
+            </div>
+          </div>
+          <div class="boundary-body">
+            <p>我会按研究优先级排序，买卖动作由你自己决定。当前页面的估值和证据模块包含启发式假设，强结论要回到 SEC 文件、财报电话会、IR 材料和客户/供应商公开证据。</p>
+          </div>
         </section>
       </aside>
     </main>
   </div>
 
-  <script src="/app.js"></script>
+  <script src="/app.js?v=20260610-finaldesk4"></script>
 </body>
 </html>
